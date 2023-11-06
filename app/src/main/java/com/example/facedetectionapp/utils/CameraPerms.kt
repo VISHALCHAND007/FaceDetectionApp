@@ -1,4 +1,4 @@
-package utils
+package com.example.facedetectionapp.utils
 
 import android.app.AlertDialog
 import android.content.Context

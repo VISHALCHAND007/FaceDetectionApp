@@ -13,10 +13,10 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.facedetectionapp.databinding.ActivityMainBinding
-import utils.Constants.Companion.currentPhotoPath
-import utils.cameraPermissionRequest
-import utils.isPermissionGranted
-import utils.openPermissionSetting
+import com.example.facedetectionapp.utils.Constants.Companion.currentPhotoPath
+import com.example.facedetectionapp.utils.cameraPermissionRequest
+import com.example.facedetectionapp.utils.isPermissionGranted
+import com.example.facedetectionapp.utils.openPermissionSetting
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -68,9 +68,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
     private fun startCameraActivity() {
-        CameraActivity.start(this) {
-
-        }
+        CameraActivity.start(this)
     }
     private fun requestCameraPermission() {
         when {

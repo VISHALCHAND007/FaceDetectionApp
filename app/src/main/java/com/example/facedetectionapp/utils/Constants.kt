@@ -1,4 +1,4 @@
-package utils
+package com.example.facedetectionapp.utils
 
 class Constants {
     companion object {
