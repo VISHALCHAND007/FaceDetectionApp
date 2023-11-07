@@ -1,4 +1,4 @@
-package com.example.facedetectionapp.activities.viewModels
+package com.example.facedetectionapp.viewModels
 
 import android.app.Application
 import androidx.camera.lifecycle.ProcessCameraProvider

@@ -11,11 +11,11 @@ import androidx.core.content.ContextCompat
 fun Context.isPermissionGranted(permission: String): Boolean {
     return ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 }
-inline fun Context.cameraPermissionRequest(crossinline positive: () -> Unit) {
+inline fun Context.customPermissionRequest(title: String,message: String, crossinline positive: () -> Unit,) {
     AlertDialog.Builder(this)
-        .setTitle("Camera Permission Required")
-        .setMessage("Without giving permission we can't open the camera!!")
-        .setPositiveButton("Allow Camera") {dialog, which ->
+        .setTitle(title)
+        .setMessage("")
+        .setPositiveButton("Allow") {dialog, which ->
             positive.invoke()
         }
         .setNegativeButton("Cancel") {_,_  ->

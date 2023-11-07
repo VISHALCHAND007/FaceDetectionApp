@@ -54,7 +54,7 @@ dependencies {
     //blaze-face
     implementation("com.google.mediapipe:tasks-vision:0.20230731")
     implementation("androidx.activity:activity-ktx:1.8.0")
-    implementation("com.google.guava:guava:27.1-android")
+//    implementation("com.google.guava:guava:27.1-android")
 
     // ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2")

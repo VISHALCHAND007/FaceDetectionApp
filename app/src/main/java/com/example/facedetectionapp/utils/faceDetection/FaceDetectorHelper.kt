@@ -1,8 +1,9 @@
-package com.example.facedetectionapp.utils
+package com.example.facedetectionapp.utils.faceDetection
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Matrix
+import android.os.Environment
 import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.VisibleForTesting
@@ -14,12 +15,13 @@ import com.google.mediapipe.tasks.core.Delegate
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.facedetector.FaceDetector
 import com.google.mediapipe.tasks.vision.facedetector.FaceDetectorResult
+import java.io.File
 
 class FaceDetectorHelper(
+    val context: Context,
     var threshold: Float = THRESHOLD_DEFAULT,
     var currentDelegate: Int = DELEGATE_CPU,
     var runningMode: RunningMode = RunningMode.LIVE_STREAM,
-    val context: Context,
     // The listener is only used when running in RunningMode.LIVE_STREAM
     var faceDetectorListener: DetectorListener? = null
 ) {

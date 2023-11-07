@@ -1,26 +1,12 @@
 package com.example.facedetectionapp.activities
 
-import android.content.pm.PackageManager
 import android.os.Bundle
-import android.os.Environment
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
-import androidx.camera.core.Preview
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
 import com.example.facedetectionapp.databinding.ActivityMainBinding
-import com.example.facedetectionapp.utils.Constants.Companion.currentPhotoPath
-import com.example.facedetectionapp.utils.cameraPermissionRequest
+import com.example.facedetectionapp.utils.customPermissionRequest
 import com.example.facedetectionapp.utils.isPermissionGranted
 import com.example.facedetectionapp.utils.openPermissionSetting
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
@@ -33,14 +19,6 @@ class MainActivity : AppCompatActivity() {
                 //open camera
                 startCameraActivity()
             }
-        }
-
-    private val takePictureContract =
-        registerForActivityResult(ActivityResultContracts.TakePicture()) {
-//        val imageFile = File(currentPhotoPath)
-//        // Save the image to the gallery
-//        MediaStore.Images.Media.insertImage(contentResolver, imageFile.absolutePath, imageFile.name, "")
-            startCamera()
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,35 +38,42 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startCamera() {
-        if(isPermissionGranted(cameraPermission)) {
+        if (isPermissionGranted(cameraPermission)) {
             //start camera
             startCameraActivity()
         } else {
             requestCameraPermission()
         }
     }
+
     private fun startCameraActivity() {
         CameraActivity.start(this)
     }
+
     private fun requestCameraPermission() {
         when {
             shouldShowRequestPermissionRationale(cameraPermission) -> {
-                cameraPermissionRequest {
+                customPermissionRequest(
+                    "Camera Permission Required",
+                    "Without giving permission we can't open the camera!!"
+                ) {
                     openPermissionSetting()
                 }
-            } else -> {
+            }
+
+            else -> {
                 requestPermissionLauncher.launch(cameraPermission)
             }
         }
     }
 
-    private fun bindCamera() {
-
-    }
-
-
 
     private fun initListeners() {
 
+    }
+
+    override fun onResume() {
+        startCamera()
+        super.onResume()
     }
 }

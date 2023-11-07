@@ -1,12 +1,10 @@
-package com.example.facedetectionapp.utils
+package com.example.facedetectionapp.utils.faceDetection
 
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Rect
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
-import java.util.jar.Attributes
 import kotlin.math.ceil
 
 open class FaceBoxOverlay(context: Context?, attributes: AttributeSet?) :
@@ -23,7 +21,7 @@ open class FaceBoxOverlay(context: Context?, attributes: AttributeSet?) :
         fun getBoxRectangle(
             imgRectWidth: Float,
             imgRectHeight: Float,
-            faceBoundingBox: Rect
+            faceBoundingBox: RectF
         ): RectF {
             val scaleX = overlay.width.toFloat() / imgRectHeight
             val scaleY = overlay.height.toFloat() / imgRectWidth
