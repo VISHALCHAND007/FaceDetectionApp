@@ -6,9 +6,11 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
+import android.util.Log
 import android.widget.Toast
-import android.window.OnBackInvokedDispatcher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -20,6 +22,7 @@ import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.core.content.ContextCompat
 import com.example.facedetectionapp.databinding.ActivityCameraBinding
 import com.example.facedetectionapp.utils.customPermissionRequest
 import com.example.facedetectionapp.utils.faceDetection.FaceBox
@@ -31,7 +34,6 @@ import com.google.mediapipe.tasks.vision.core.RunningMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.io.File
 import java.util.concurrent.Executors
 
 class CameraActivity : AppCompatActivity() {
@@ -78,16 +80,14 @@ class CameraActivity : AppCompatActivity() {
     }
 
     private fun bindCameraPreview() {
+        imageCapture = ImageCapture.Builder()
+            .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+            .build()
         cameraPreview = Preview.Builder()
             .setTargetRotation(binding.cameraPreview.display.rotation)
             .setTargetAspectRatio(AspectRatio.RATIO_4_3)
             .build()
         cameraPreview.setSurfaceProvider(binding.cameraPreview.surfaceProvider)
-        try {
-            processCameraProvider.bindToLifecycle(this, cameraSelector, cameraPreview)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
     }
 
     private fun bindInputAnalyser() {
@@ -101,29 +101,11 @@ class CameraActivity : AppCompatActivity() {
                 runningMode = RunningMode.LIVE_STREAM,
                 faceDetectorListener = object : FaceDetectorHelper.DetectorListener {
                     override fun onError(error: String, errorCode: Int) {
-
+                        Log.e("Error Saving", error)
                     }
 
                     override fun onResults(resultBundle: FaceDetectorHelper.ResultBundle) {
-                        var imageCount = 0
-                        //first clear the existing boxes
-                        binding.faceBoxOverlay.clear()
-
-                        //drawing the rectangles
-                        val detections = resultBundle.results[0].detections()
-                        imageCount++
-                        detections?.forEach {
-                            val box = FaceBox(
-                                binding.faceBoxOverlay,
-                                imgProxy.cropRect,
-                                it.boundingBox()
-                            )
-                            binding.faceBoxOverlay.add(box)
-                        }
-                        if (imageCount == 1) {
-//                            clickImage()
-                            imageCount--
-                        }
+                        setFaceBoxedAndCapture(resultBundle)
                     }
                 }
             )
@@ -142,9 +124,36 @@ class CameraActivity : AppCompatActivity() {
             detectFace(imgProxy)
         }
         try {
-            processCameraProvider.bindToLifecycle(this, cameraSelector, imageAnalysis)
+            processCameraProvider.unbindAll()
+            processCameraProvider.bindToLifecycle(
+                this,
+                cameraSelector,
+                imageCapture,
+                cameraPreview,
+                imageAnalysis,
+            )
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    private fun setFaceBoxedAndCapture(resultBundle: FaceDetectorHelper.ResultBundle) {
+        //first clear the existing boxes
+        binding.faceBoxOverlay.clear()
+
+        //drawing the rectangles
+        val detections = resultBundle.results[0].detections()
+        detections?.forEach {
+            val box = FaceBox(
+                binding.faceBoxOverlay,
+                imgProxy.cropRect,
+                it.boundingBox()
+            )
+            binding.faceBoxOverlay.add(box)
+        }
+        //capture
+        if (!detections.isNullOrEmpty()) {
+            clickImage()
         }
     }
 
@@ -155,6 +164,7 @@ class CameraActivity : AppCompatActivity() {
     }
 
     companion object {
+        var timer = 10 //default timer set to 10sec
         fun start(context: Context) {
             Intent(context, CameraActivity::class.java).also {
                 context.startActivity(it)
@@ -163,42 +173,42 @@ class CameraActivity : AppCompatActivity() {
     }
 
     private fun clickImage() {
-        CoroutineScope(Dispatchers.IO).launch {
-            if (isPermissionGranted(storagePermission)) {
-                val name =
-                    "${Environment.getExternalStorageDirectory()} + ${System.currentTimeMillis()}"
-                val contentValues = ContentValues()
-                contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-                contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "images/png")
+        if (isPermissionGranted(storagePermission)) {
+            val name =
+                "${Environment.getExternalStorageDirectory()} + ${System.currentTimeMillis()}"
+            val contentValues = ContentValues()
+            contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+            contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
 
-                if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P)
-                    contentValues.put(
-                        MediaStore.MediaColumns.RELATIVE_PATH,
-                        "pictures/FaceDetector"
-                    )
+            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P)
+                contentValues.put(
+                    MediaStore.MediaColumns.RELATIVE_PATH,
+                    "pictures/FaceDetector"
+                )
 
-                val outputOptions = ImageCapture.OutputFileOptions.Builder(
-                    contentResolver,
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                    contentValues
-                ).build()
-                imageCapture.takePicture(
-                    outputOptions,
-                    Executors.newSingleThreadExecutor(),
-                    object : ImageCapture.OnImageSavedCallback {
-                        override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                            runOnUiThread {
-                                Toast.makeText(this@CameraActivity, "", Toast.LENGTH_SHORT).show()
-                            }
+            val outputOptions = ImageCapture.OutputFileOptions.Builder(
+                contentResolver,
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                contentValues
+            ).build()
+            //taking picture
+            imageCapture.takePicture(
+                outputOptions,
+                ContextCompat.getMainExecutor(this@CameraActivity),
+                object : ImageCapture.OnImageSavedCallback {
+                    override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                        runOnUiThread {
+                            Toast.makeText(this@CameraActivity, "Image Saved.", Toast.LENGTH_SHORT)
+                                .show()
                         }
+                    }
 
-                        override fun onError(exception: ImageCaptureException) {
-                            exception.printStackTrace()
-                        }
-                    })
-            } else {
-                requestStoragePermission()
-            }
+                    override fun onError(exception: ImageCaptureException) {
+                        Log.e("Saving error==", exception.toString())
+                    }
+                })
+        } else {
+            requestStoragePermission()
         }
     }
 
