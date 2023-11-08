@@ -1,13 +1,15 @@
 package com.example.facedetectionapp.activities
 
+import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
-import android.os.Handler
-import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
@@ -30,10 +32,10 @@ import com.example.facedetectionapp.utils.faceDetection.FaceDetectorHelper
 import com.example.facedetectionapp.utils.isPermissionGranted
 import com.example.facedetectionapp.utils.openPermissionSetting
 import com.example.facedetectionapp.viewModels.CameraXViewModel
+import com.google.mediapipe.tasks.components.containers.Detection
 import com.google.mediapipe.tasks.vision.core.RunningMode
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.Executors
 
 class CameraActivity : AppCompatActivity() {
@@ -105,7 +107,7 @@ class CameraActivity : AppCompatActivity() {
                     }
 
                     override fun onResults(resultBundle: FaceDetectorHelper.ResultBundle) {
-                        setFaceBoxedAndCapture(resultBundle)
+                        setFaceBoxesAndCapture(resultBundle)
                     }
                 }
             )
@@ -113,12 +115,11 @@ class CameraActivity : AppCompatActivity() {
 // ImageAnalysis. Using RGBA 8888 to match how our models work
         imageAnalysis = ImageAnalysis.Builder()
             .setTargetRotation(binding.cameraPreview.display.rotation)
-            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
             .build()
 
-        var cameraExecutor = Executors.newSingleThreadExecutor()
+        val cameraExecutor = Executors.newSingleThreadExecutor()
         imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
             imgProxy = imageProxy
             detectFace(imgProxy)
@@ -137,23 +138,28 @@ class CameraActivity : AppCompatActivity() {
         }
     }
 
-    private fun setFaceBoxedAndCapture(resultBundle: FaceDetectorHelper.ResultBundle) {
+    private fun setFaceBoxesAndCapture(resultBundle: FaceDetectorHelper.ResultBundle) {
         //first clear the existing boxes
         binding.faceBoxOverlay.clear()
 
         //drawing the rectangles
         val detections = resultBundle.results[0].detections()
-        detections?.forEach {
+        setBoxes(detections)
+        //capture
+        if (!detections.isNullOrEmpty()) {
+            clickImage(detections)
+        }
+    }
+
+    private fun setBoxes(detections: MutableList<Detection>) {
+        //drawing the rectangles
+        detections.forEach {
             val box = FaceBox(
                 binding.faceBoxOverlay,
                 imgProxy.cropRect,
                 it.boundingBox()
             )
             binding.faceBoxOverlay.add(box)
-        }
-        //capture
-        if (!detections.isNullOrEmpty()) {
-            clickImage()
         }
     }
 
@@ -172,7 +178,7 @@ class CameraActivity : AppCompatActivity() {
         }
     }
 
-    private fun clickImage() {
+    private fun clickImage(detections: MutableList<Detection>) {
         if (isPermissionGranted(storagePermission)) {
             val name =
                 "${Environment.getExternalStorageDirectory()} + ${System.currentTimeMillis()}"
@@ -196,11 +202,33 @@ class CameraActivity : AppCompatActivity() {
                 outputOptions,
                 ContextCompat.getMainExecutor(this@CameraActivity),
                 object : ImageCapture.OnImageSavedCallback {
+                    @SuppressLint("RestrictedApi")
                     override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-                        runOnUiThread {
-                            Toast.makeText(this@CameraActivity, "Image Saved.", Toast.LENGTH_SHORT)
-                                .show()
-                        }
+//                        val imageFile = outputOptions.file
+//                        if(imageFile != null) {
+//                            val originalBitmap = BitmapFactory.decodeFile(outputOptions.file!!.absolutePath)
+//                            val modifiedBitmap = Bitmap.createBitmap(originalBitmap.width, originalBitmap.height, Bitmap.Config.ARGB_8888)
+//                            val canvas = Canvas(modifiedBitmap)
+//                            canvas.drawBitmap(originalBitmap, 0f, 0f, null) //drawing the original bitmap first
+//                            //Now drawing the overlay
+//                            synchronized(startLockTask()) {
+//                                detections.forEach {
+//                                    val box = FaceBox(
+//                                        binding.faceBoxOverlay,
+//                                        imgProxy.cropRect,
+//                                        it.boundingBox()
+//                                    )
+//                                    box.draw(canvas)
+//                                }
+//                            }
+//                            val modifiedImgFile = File("${outputOptions.file?.absoluteFile}")
+//                            val fileOutputStream = FileOutputStream(modifiedImgFile)
+//                            fileOutputStream.close()
+                            runOnUiThread {
+                                Toast.makeText(this@CameraActivity, "Image Saved.", Toast.LENGTH_SHORT)
+                                    .show()
+                            }
+//                        }
                     }
 
                     override fun onError(exception: ImageCaptureException) {

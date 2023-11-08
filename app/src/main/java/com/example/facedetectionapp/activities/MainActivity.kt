@@ -1,8 +1,11 @@
 package com.example.facedetectionapp.activities
 
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.example.facedetectionapp.databinding.ActivityMainBinding
 import com.example.facedetectionapp.utils.customPermissionRequest
 import com.example.facedetectionapp.utils.isPermissionGranted
@@ -11,7 +14,8 @@ import com.example.facedetectionapp.utils.openPermissionSetting
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private val cameraPermission = android.Manifest.permission.CAMERA
-    private val writePermission = android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+    private val readPermission = android.Manifest.permission.READ_EXTERNAL_STORAGE
+
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -25,6 +29,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        if(ContextCompat.checkSelfPermission(this, readPermission) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(readPermission), 10)
+        }
         init()
     }
 
