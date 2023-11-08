@@ -10,12 +10,8 @@ import android.media.FaceDetector.Face
 class FaceBox(
     faceBoxOverlay: FaceBoxOverlay,
     private val imageRect: Rect,
-    boundingBox: RectF
+    private val boundingBox: RectF
     ): FaceBoxOverlay.Facebox(faceBoxOverlay) {
-    val left = boundingBox.left
-    val top = boundingBox.top * 20
-    val right = boundingBox.right
-    val bottom = boundingBox.bottom
 
     private val paint = Paint().apply {
         color = Color.GREEN
@@ -27,9 +23,7 @@ class FaceBox(
         val rect = getBoxRectangle(
             imgRectWidth = imageRect.width().toFloat(),
             imgRectHeight = imageRect.height().toFloat(),
-            faceBoundingBox = RectF(
-                left, top, right, bottom
-            )
+            faceBoundingBox = boundingBox
         )
         canvas?.drawRect(rect, paint)
     }
