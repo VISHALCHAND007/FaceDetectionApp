@@ -1,17 +1,13 @@
 package com.example.facedetectionapp.activities
 
-import android.annotation.SuppressLint
-import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import android.os.Build
 import android.os.Bundle
 import android.os.Environment
-import android.provider.MediaStore
 import android.util.Log
+import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -20,11 +16,9 @@ import androidx.camera.core.AspectRatio
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
-import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.core.content.ContextCompat
 import com.example.facedetectionapp.databinding.ActivityCameraBinding
 import com.example.facedetectionapp.utils.customPermissionRequest
 import com.example.facedetectionapp.utils.faceDetection.FaceBox
@@ -34,6 +28,10 @@ import com.example.facedetectionapp.utils.openPermissionSetting
 import com.example.facedetectionapp.viewModels.CameraXViewModel
 import com.google.mediapipe.tasks.components.containers.Detection
 import com.google.mediapipe.tasks.vision.core.RunningMode
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.Executors
@@ -147,7 +145,7 @@ class CameraActivity : AppCompatActivity() {
         setBoxes(detections)
         //capture
         if (!detections.isNullOrEmpty()) {
-            clickImage(detections)
+            clickImage()
         }
     }
 
@@ -178,65 +176,50 @@ class CameraActivity : AppCompatActivity() {
         }
     }
 
-    private fun clickImage(detections: MutableList<Detection>) {
+    private fun clickImage() {
         if (isPermissionGranted(storagePermission)) {
             val name =
-                "${Environment.getExternalStorageDirectory()} + ${System.currentTimeMillis()}"
-            val contentValues = ContentValues()
-            contentValues.put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-            contentValues.put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                "${System.currentTimeMillis()}"
 
-            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P)
-                contentValues.put(
-                    MediaStore.MediaColumns.RELATIVE_PATH,
-                    "pictures/FaceDetector"
-                )
-
-            val outputOptions = ImageCapture.OutputFileOptions.Builder(
-                contentResolver,
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                contentValues
-            ).build()
-            //taking picture
-            imageCapture.takePicture(
-                outputOptions,
-                ContextCompat.getMainExecutor(this@CameraActivity),
-                object : ImageCapture.OnImageSavedCallback {
-                    @SuppressLint("RestrictedApi")
-                    override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
-//                        val imageFile = outputOptions.file
-//                        if(imageFile != null) {
-//                            val originalBitmap = BitmapFactory.decodeFile(outputOptions.file!!.absolutePath)
-//                            val modifiedBitmap = Bitmap.createBitmap(originalBitmap.width, originalBitmap.height, Bitmap.Config.ARGB_8888)
-//                            val canvas = Canvas(modifiedBitmap)
-//                            canvas.drawBitmap(originalBitmap, 0f, 0f, null) //drawing the original bitmap first
-//                            //Now drawing the overlay
-//                            synchronized(startLockTask()) {
-//                                detections.forEach {
-//                                    val box = FaceBox(
-//                                        binding.faceBoxOverlay,
-//                                        imgProxy.cropRect,
-//                                        it.boundingBox()
-//                                    )
-//                                    box.draw(canvas)
-//                                }
-//                            }
-//                            val modifiedImgFile = File("${outputOptions.file?.absoluteFile}")
-//                            val fileOutputStream = FileOutputStream(modifiedImgFile)
-//                            fileOutputStream.close()
-                            runOnUiThread {
-                                Toast.makeText(this@CameraActivity, "Image Saved.", Toast.LENGTH_SHORT)
-                                    .show()
-                            }
-//                        }
-                    }
-
-                    override fun onError(exception: ImageCaptureException) {
-                        Log.e("Saving error==", exception.toString())
-                    }
-                })
+            val bitmap = getBitmapFromView(binding.cameraView)
+            storeBitmapLocally(bitmap, name)
         } else {
             requestStoragePermission()
+        }
+    }
+
+    private fun getBitmapFromView(view: View): Bitmap {
+        val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        view.draw(canvas)
+        return bitmap
+    }
+
+    private fun storeBitmapLocally(bitmap: Bitmap, name: String) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                //creating file to save the image
+                val path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM)
+                val dir = File("$path/FaceDetector")
+                if(!dir.exists()) {
+                    dir.mkdir()
+                }
+                val imageFile = File(dir, "$name.jpeg")
+                val outputStream = FileOutputStream(imageFile)
+                //saving
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream)
+                runOnUiThread {
+                    Toast.makeText(this@CameraActivity, "Saved", Toast.LENGTH_SHORT).show()
+                }
+                withContext(Dispatchers.IO) {
+                    outputStream.flush()
+                }
+                withContext(Dispatchers.IO) {
+                    outputStream.close()
+                }
+            } catch (e: Exception) {
+                Log.e("Error Saving==", e.toString())
+            }
         }
     }
 
