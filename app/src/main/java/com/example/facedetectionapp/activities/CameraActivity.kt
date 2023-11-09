@@ -1,13 +1,20 @@
 package com.example.facedetectionapp.activities
 
+import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.PixelFormat
+import android.hardware.display.DisplayManager
+import android.media.Image
+import android.media.ImageReader
+import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
-import android.os.Handler
-import android.os.Looper
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
@@ -31,9 +38,9 @@ import com.example.facedetectionapp.utils.isPermissionGranted
 import com.example.facedetectionapp.utils.openPermissionSetting
 import com.example.facedetectionapp.viewModels.CameraXViewModel
 import com.google.mediapipe.tasks.vision.core.RunningMode
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 import java.util.concurrent.Executors
 
 class CameraActivity : AppCompatActivity() {
@@ -47,6 +54,7 @@ class CameraActivity : AppCompatActivity() {
     private lateinit var imgProxy: ImageProxy
     private lateinit var imageCapture: ImageCapture
     private val storagePermission = android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+    private lateinit var mediaProjectionManager: MediaProjectionManager
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -153,9 +161,76 @@ class CameraActivity : AppCompatActivity() {
         }
         //capture
         if (!detections.isNullOrEmpty()) {
-            clickImage()
+//            clickImage()
+//            takeSS()
         }
     }
+
+    @SuppressLint("ServiceCast")
+    private fun takeSS() {
+        val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        val screenCaptureIntent = mediaProjectionManager.createScreenCaptureIntent()
+        startActivityForResult(screenCaptureIntent, SCREEN_CAPTURE_REQUEST_CODE)
+
+        // Step 2 and 3: Handle the result in onActivityResult
+    }
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == SCREEN_CAPTURE_REQUEST_CODE && resultCode == Activity.RESULT_OK && data != null) {
+            val mediaProjection = mediaProjectionManager.getMediaProjection(resultCode, data)
+
+            // Create a virtual display
+            val metrics = resources.displayMetrics
+            val screenWidth = metrics.widthPixels
+            val screenHeight = metrics.heightPixels
+            val screenDensity = metrics.densityDpi
+
+            val imageReader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2)
+            val virtualDisplay = mediaProjection.createVirtualDisplay(
+                "ScreenCapture",
+                screenWidth,
+                screenHeight,
+                screenDensity,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                imageReader.surface,
+                null,
+                null
+            )
+
+            // Step 4: Capture the screen content
+            imageReader.setOnImageAvailableListener({ reader ->
+                val image = reader.acquireLatestImage()
+                // Process and save the image as needed
+                saveScreenshot(image)
+                image.close()
+            }, null)
+        }
+    }
+
+    private fun saveScreenshot(image: Image) {
+        val buffer = image.planes[0].buffer
+        val bytes = ByteArray(buffer.remaining())
+        buffer.get(bytes)
+
+        val screenshotBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+
+        // Save the bitmap or do further processing
+        // Example: Save to the device's Pictures directory
+        val filename = "screenshot_${System.currentTimeMillis()}.png"
+        val screenshotFile = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), filename)
+
+        try {
+            FileOutputStream(screenshotFile).use { fos ->
+                screenshotBitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
+            }
+            // Notify the user or perform any necessary actions
+            Toast.makeText(this, "Screenshot saved to Pictures directory", Toast.LENGTH_SHORT).show()
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+    }
+
 
     private fun detectFace(imageProxy: ImageProxy) {
         faceDetectorHelper.detectLivestreamFrame(
@@ -164,7 +239,7 @@ class CameraActivity : AppCompatActivity() {
     }
 
     companion object {
-        var timer = 10 //default timer set to 10sec
+        const val SCREEN_CAPTURE_REQUEST_CODE = 101
         fun start(context: Context) {
             Intent(context, CameraActivity::class.java).also {
                 context.startActivity(it)
