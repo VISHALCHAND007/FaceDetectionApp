@@ -1,6 +1,7 @@
 package com.example.facedetectionapp.activities
 
 import android.annotation.SuppressLint
+import android.content.ContentResolver
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -18,6 +19,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
+import androidx.camera.core.AspectRatio
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
@@ -37,9 +39,14 @@ import com.google.mediapipe.tasks.components.containers.Detection
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.io.InputStream
 import java.io.OutputStream
 import java.util.concurrent.Executors
 
@@ -86,13 +93,16 @@ class CameraActivity : AppCompatActivity() {
         }
     }
 
+    @SuppressLint("RestrictedApi")
     private fun bindCameraPreview() {
         imageCapture = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+//            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+//            .setDefaultResolution(Size(DEFAULT_WIDTH, DEFAULT_HEIGHT))
             .build()
         cameraPreview = Preview.Builder()
             .setTargetRotation(binding.cameraPreview.display.rotation)
-//            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
             .build()
         cameraPreview.setSurfaceProvider(binding.cameraPreview.surfaceProvider)
     }
@@ -152,7 +162,19 @@ class CameraActivity : AppCompatActivity() {
         setBoxes(detections)
         //capture
         if (!detections.isNullOrEmpty()) {
-            clickImage(detections)
+            if (takePictureJob == null || takePictureJob?.isCompleted == true) {
+                // Start a new coroutine to take a picture every 5 seconds
+                takePictureJob = CoroutineScope(Dispatchers.IO).launch {
+                    while (isActive) {
+                        // Take a picture
+                        withContext(Dispatchers.Main) {
+                            clickImage()
+                        }
+                        // Delay for 5 seconds before taking the next picture
+                        delay(0)
+                    }
+                }
+            }
         }
     }
 
@@ -176,6 +198,9 @@ class CameraActivity : AppCompatActivity() {
 
     companion object {
         var timer = 10 //default timer set to 10sec
+        const val DEFAULT_WIDTH = 1280
+        const val DEFAULT_HEIGHT = 720
+        var takePictureJob: Job? = null
         fun start(context: Context) {
             Intent(context, CameraActivity::class.java).also {
                 context.startActivity(it)
@@ -183,7 +208,7 @@ class CameraActivity : AppCompatActivity() {
         }
     }
 
-    private fun clickImage(detections: MutableList<Detection>) {
+    private fun clickImage() {
         if (isPermissionGranted(storagePermission)) {
             val name =
                 "${Environment.getExternalStorageDirectory()} + ${System.currentTimeMillis()}"
@@ -207,13 +232,14 @@ class CameraActivity : AppCompatActivity() {
                 outputOptions,
                 ContextCompat.getMainExecutor(this@CameraActivity),
                 object : ImageCapture.OnImageSavedCallback {
-                    @SuppressLint("RestrictedApi")
                     override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
+                        CoroutineScope(Dispatchers.IO).launch {
                             saveImageWithOverlay(outputFileResults)
-                            runOnUiThread {
-                                Toast.makeText(this@CameraActivity, "Image Saved.", Toast.LENGTH_SHORT)
-                                    .show()
-                            }
+                        }
+                        runOnUiThread {
+                            Toast.makeText(this@CameraActivity, "Image Saved.", Toast.LENGTH_SHORT)
+                                .show()
+                        }
 //                        }
                     }
 
@@ -229,8 +255,8 @@ class CameraActivity : AppCompatActivity() {
     private fun saveImageWithOverlay(outputFileResults: ImageCapture.OutputFileResults) {
         try {
             val uri = outputFileResults.savedUri
-            if(uri != null) {
-                val bitmap = getBitmapFromUri(outputFileResults.savedUri!!)
+            if (uri != null) {
+                val bitmap = getBitmapFromUri(uri)
                 val finalBitmap = getBitmapFromView(bitmap, binding.cameraView)
                 if (finalBitmap != null) {
                     saveMediaToStorage(finalBitmap)
@@ -242,98 +268,105 @@ class CameraActivity : AppCompatActivity() {
     }
 
     private fun saveMediaToStorage(bitmap: Bitmap) {
-        CoroutineScope(Dispatchers.IO).launch {
-            // Generating a file name
-            val filename = "${System.currentTimeMillis()}.jpg"
+        // Generating a file name
+        val filename = "${System.currentTimeMillis()}.jpeg"
 
-            // Output stream
-            var fos: OutputStream? = null
+        // Output stream
+        var fos: OutputStream? = null
 
-            // For devices running android >= Q
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // getting the contentResolver
-                this@CameraActivity.contentResolver?.also { resolver ->
+        // For devices running android >= Q
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // getting the contentResolver
+            this@CameraActivity.contentResolver?.also { resolver ->
 
-                    // Content resolver will process the content-values
-                    val contentValues = ContentValues().apply {
+                // Content resolver will process the content-values
+                val contentValues = ContentValues().apply {
 
-                        // putting file information in content values
-                        put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-                        put(MediaStore.MediaColumns.MIME_TYPE, "image/jpg")
-                        put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES)
-                    }
-
-                    // Inserting the contentValues to
-                    // contentResolver and getting the Uri
-                    val imageUri: Uri? = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-
-                    // Opening an outputstream with the Uri that we got
-                    fos = imageUri?.let { resolver.openOutputStream(it) }
+                    // putting file information in content values
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                    put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES)
                 }
-            } else {
-                // These for devices running on android < Q
-                val imagesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-                val image = File(imagesDir, filename)
-                fos = FileOutputStream(image)
-            }
 
-            fos?.use {
-                // Finally writing the bitmap to the output stream that we opened
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, it)
-                runOnUiThread {
-                    Toast.makeText(this@CameraActivity , "Captured View and saved to Gallery" , Toast.LENGTH_SHORT).show()
-                }
+                // Inserting the contentValues to
+                // contentResolver and getting the Uri
+                val imageUri: Uri? =
+                    resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+
+                // Opening an outputstream with the Uri that we got
+                fos = imageUri?.let { resolver.openOutputStream(it) }
             }
-            fos?.flush()
-            fos?.close()
+        } else {
+            // These for devices running on android < Q
+            val imagesDir =
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+            val image = File(imagesDir, filename)
+            fos = FileOutputStream(image)
+        }
+
+        fos?.use {
+            // Finally writing the bitmap to the output stream that we opened
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, it)
+            runOnUiThread {
+                Toast.makeText(
+                    this@CameraActivity,
+                    "Captured View and saved to Gallery",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     }
+
     private fun getBitmapFromView(bitmap: Bitmap?, overlay: View): Bitmap? {
         var combinedBitmap: Bitmap? = null
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
+        try {
+            if (bitmap != null) {
+                val overlayBitmap =
+                    Bitmap.createBitmap(overlay.width, overlay.height, Bitmap.Config.ARGB_8888)
+                val overlayCanvas = Canvas(overlayBitmap)
+                overlay.draw(overlayCanvas)
 
-                if(bitmap != null) {
-                    val overlayBitmap = Bitmap.createBitmap(overlay.width, overlay.height, Bitmap.Config.ARGB_8888)
-                    val overlayCanvas = Canvas(overlayBitmap)
-                    overlay.draw(overlayCanvas)
+                // Create a new bitmap with the same size as the original bitmap
+                combinedBitmap =
+                    Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+                val canvas = Canvas(combinedBitmap!!)
 
-                    // Create a new bitmap with the same size as the original bitmap
-                    combinedBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
-                    val canvas = Canvas(combinedBitmap!!)
+                // Draw the original bitmap
+                canvas.drawBitmap(bitmap, 0f, 0f, null)
 
-                    // Draw the original bitmap
-                    canvas.drawBitmap(bitmap, 0f, 0f, null)
+                val overlayX = (bitmap.width - overlay.width) / 2f
+                val overlayY = (bitmap.height - overlay.height) / 2f
 
-                    val overlayX = (bitmap.width - overlay.width) / 2f
-                    val overlayY = (bitmap.height - overlay.height) /2f
-
-                    // Draw the overlay on top of the original bitmap
-                    canvas.drawBitmap(overlayBitmap, overlayX, overlayY, null)
-                }
-            }catch (e: Exception) {
-                Log.e("Bitmap can't be generated", e.toString())
+                // Draw the overlay on top of the original bitmap
+//                    canvas.drawBitmap(overlayBitmap, 0f, 0f, null)
+                canvas.drawBitmap(overlayBitmap, overlayX, overlayY, null)
             }
+        } catch (e: Exception) {
+            Log.e("Bitmap can't be generated", e.toString())
         }
         return combinedBitmap
     }
+
     private fun getBitmapFromUri(uri: Uri): Bitmap? {
+        var inputStream: InputStream?
         return try {
+
             // Use content resolver to open an input stream from the URI
-            val inputStream = contentResolver.openInputStream(uri)
+            inputStream = contentResolver.openInputStream(uri)
 
             // Decode the input stream into a Bitmap
             val bitmap = BitmapFactory.decodeStream(inputStream)
 
-            // Close the input stream
+//             Close the input stream
             inputStream?.close()
 
             bitmap // Return the decoded Bitmap
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("Error Occurred==", e.toString())
             null
         }
     }
+
     private fun requestStoragePermission() {
         when {
             shouldShowRequestPermissionRationale(storagePermission) -> {
