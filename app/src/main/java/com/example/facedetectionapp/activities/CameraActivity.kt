@@ -12,8 +12,10 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.util.Log
+import android.util.Size
 import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,6 +30,7 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
+import androidx.core.net.toFile
 import com.example.facedetectionapp.databinding.ActivityCameraBinding
 import com.example.facedetectionapp.utils.customPermissionRequest
 import com.example.facedetectionapp.utils.faceDetection.FaceBox
@@ -61,6 +64,7 @@ class CameraActivity : AppCompatActivity() {
     private lateinit var imgProxy: ImageProxy
     private lateinit var imageCapture: ImageCapture
     private val storagePermission = android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+    private lateinit var uri: Uri
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -97,8 +101,8 @@ class CameraActivity : AppCompatActivity() {
     private fun bindCameraPreview() {
         imageCapture = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-//            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
-//            .setDefaultResolution(Size(DEFAULT_WIDTH, DEFAULT_HEIGHT))
+            .setTargetAspectRatio(AspectRatio.RATIO_4_3)
+            .setDefaultResolution(Size(DEFAULT_WIDTH, DEFAULT_HEIGHT))
             .build()
         cameraPreview = Preview.Builder()
             .setTargetRotation(binding.cameraPreview.display.rotation)
@@ -171,7 +175,7 @@ class CameraActivity : AppCompatActivity() {
                             clickImage()
                         }
                         // Delay for 5 seconds before taking the next picture
-                        delay(0)
+                        delay(5000)
                     }
                 }
             }
@@ -236,11 +240,6 @@ class CameraActivity : AppCompatActivity() {
                         CoroutineScope(Dispatchers.IO).launch {
                             saveImageWithOverlay(outputFileResults)
                         }
-                        runOnUiThread {
-                            Toast.makeText(this@CameraActivity, "Image Saved.", Toast.LENGTH_SHORT)
-                                .show()
-                        }
-//                        }
                     }
 
                     override fun onError(exception: ImageCaptureException) {
@@ -254,13 +253,11 @@ class CameraActivity : AppCompatActivity() {
 
     private fun saveImageWithOverlay(outputFileResults: ImageCapture.OutputFileResults) {
         try {
-            val uri = outputFileResults.savedUri
-            if (uri != null) {
-                val bitmap = getBitmapFromUri(uri)
-                val finalBitmap = getBitmapFromView(bitmap, binding.cameraView)
-                if (finalBitmap != null) {
-                    saveMediaToStorage(finalBitmap)
-                }
+            uri = outputFileResults.savedUri!!
+            val bitmap = getBitmapFromUri(uri)
+            val finalBitmap = getBitmapFromView(bitmap, binding.cameraView)
+            if (finalBitmap != null) {
+                saveMediaToStorage(finalBitmap)
             }
         } catch (e: Exception) {
             Log.e("Error saving: ", e.toString())
@@ -310,10 +307,23 @@ class CameraActivity : AppCompatActivity() {
             runOnUiThread {
                 Toast.makeText(
                     this@CameraActivity,
-                    "Captured View and saved to Gallery",
+                    "Captured.",
                     Toast.LENGTH_SHORT
                 ).show()
             }
+            deleteFileWithUri(uri)
+        }
+    }
+
+    private fun deleteFileWithUri(uri: Uri) {
+        try {
+            val contentResolver: ContentResolver = applicationContext.contentResolver
+
+            // Delete the file using the content resolver
+            contentResolver.delete(uri, null, null)
+
+        } catch (e: Exception) {
+            Log.e("Delete File Error", e.toString())
         }
     }
 
