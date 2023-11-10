@@ -40,12 +40,6 @@ open class FaceBoxOverlay(context: Context?, attributes: AttributeSet?) :
                 right  = faceBoundingBox.right * scale + offSetX
                 bottom = faceBoundingBox.bottom * scale + offSetY
             }
-//            val centerX =  overlay.width.toFloat() / 2.0f
-//
-//            return mappedBox.apply {
-//                left = centerX + (centerX - left)
-//                right = centerX - (right - centerX)
-//            }
         }
     }
 

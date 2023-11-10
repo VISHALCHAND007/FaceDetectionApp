@@ -8,6 +8,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Matrix
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -170,7 +171,7 @@ class CameraActivity : AppCompatActivity() {
                     while (isActive) {
                         // Take a picture
                         withContext(Dispatchers.Main) {
-//                            clickImage()
+                            clickImage()
                         }
                         // Delay for 5 seconds before taking the next picture
                         delay(5000)
@@ -204,7 +205,6 @@ class CameraActivity : AppCompatActivity() {
     }
 
     companion object {
-        var timer = 10 //default timer set to 10sec
         const val DEFAULT_WIDTH = 1280
         const val DEFAULT_HEIGHT = 720
         var takePictureJob: Job? = null
@@ -337,6 +337,7 @@ class CameraActivity : AppCompatActivity() {
                 val overlayBitmap =
                     Bitmap.createBitmap(overlay.width, overlay.height, Bitmap.Config.ARGB_8888)
                 val overlayCanvas = Canvas(overlayBitmap)
+                flipCanvasHorizontally(overlayCanvas)
                 overlay.draw(overlayCanvas)
 
                 // Create a new bitmap with the same size as the original bitmap
@@ -350,14 +351,18 @@ class CameraActivity : AppCompatActivity() {
                 val overlayX = (bitmap.width - overlay.width) / 2f
                 val overlayY = (bitmap.height - overlay.height) / 2f
 
-                // Draw the overlay on top of the original bitmap
-//                    canvas.drawBitmap(overlayBitmap, 0f, 0f, null)
                 canvas.drawBitmap(overlayBitmap, overlayX, overlayY, null)
             }
         } catch (e: Exception) {
             Log.e("Bitmap can't be generated", e.toString())
         }
         return combinedBitmap
+    }
+
+    fun flipCanvasHorizontally(canvas: Canvas) {
+        val matrix = Matrix()
+        matrix.setScale(-1f, 1f, canvas.width / 2f, 0f) // Flip horizontally around the center
+        canvas.concat(matrix)
     }
 
     private fun getBitmapFromUri(uri: Uri): Bitmap? {
