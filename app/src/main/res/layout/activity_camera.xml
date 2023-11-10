@@ -16,7 +16,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <com.example.facedetectionapp.utils.faceDetection.FaceBoxOverlay
+    <com.example.facedetectionapp.utils.faceDetection.ui.FaceBoxOverlay
         android:id="@+id/faceBoxOverlay"
         android:layout_width="0dp"
         android:layout_height="0dp"

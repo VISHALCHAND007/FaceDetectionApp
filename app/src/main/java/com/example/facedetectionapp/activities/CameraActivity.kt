@@ -32,8 +32,8 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import com.example.facedetectionapp.databinding.ActivityCameraBinding
 import com.example.facedetectionapp.utils.customPermissionRequest
-import com.example.facedetectionapp.utils.faceDetection.FaceBox
-import com.example.facedetectionapp.utils.faceDetection.FaceDetectorHelper
+import com.example.facedetectionapp.utils.faceDetection.domain.FaceBox
+import com.example.facedetectionapp.utils.faceDetection.data.FaceDetectorHelper
 import com.example.facedetectionapp.utils.isPermissionGranted
 import com.example.facedetectionapp.utils.openPermissionSetting
 import com.example.facedetectionapp.viewModels.CameraXViewModel
@@ -402,24 +402,3 @@ class CameraActivity : AppCompatActivity() {
         }
     }
 }
-
-//                        val imageFile = outputOptions.file
-//                        if(imageFile != null) {
-//                            val originalBitmap = BitmapFactory.decodeFile(outputOptions.file!!.absolutePath)
-//                            val modifiedBitmap = Bitmap.createBitmap(originalBitmap.width, originalBitmap.height, Bitmap.Config.ARGB_8888)
-//                            val canvas = Canvas(modifiedBitmap)
-//                            canvas.drawBitmap(originalBitmap, 0f, 0f, null) //drawing the original bitmap first
-//                            //Now drawing the overlay
-//                            synchronized(startLockTask()) {
-//                                detections.forEach {
-//                                    val box = FaceBox(
-//                                        binding.faceBoxOverlay,
-//                                        imgProxy.cropRect,
-//                                        it.boundingBox()
-//                                    )
-//                                    box.draw(canvas)
-//                                }
-//                            }
-//                            val modifiedImgFile = File("${outputOptions.file?.absoluteFile}")
-//                            val fileOutputStream = FileOutputStream(modifiedImgFile)
-//                            fileOutputStream.close()
