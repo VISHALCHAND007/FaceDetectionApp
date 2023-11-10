@@ -12,7 +12,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
-import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.util.Log
 import android.util.Size
@@ -30,7 +29,6 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
-import androidx.core.net.toFile
 import com.example.facedetectionapp.databinding.ActivityCameraBinding
 import com.example.facedetectionapp.utils.customPermissionRequest
 import com.example.facedetectionapp.utils.faceDetection.FaceBox
@@ -172,7 +170,7 @@ class CameraActivity : AppCompatActivity() {
                     while (isActive) {
                         // Take a picture
                         withContext(Dispatchers.Main) {
-                            clickImage()
+//                            clickImage()
                         }
                         // Delay for 5 seconds before taking the next picture
                         delay(5000)
@@ -182,6 +180,7 @@ class CameraActivity : AppCompatActivity() {
         }
     }
 
+    @SuppressLint("SetTextI18n")
     private fun setBoxes(detections: MutableList<Detection>) {
         //drawing the rectangles
         detections.forEach {
@@ -190,6 +189,10 @@ class CameraActivity : AppCompatActivity() {
                 imgProxy.cropRect,
                 it.boundingBox()
             )
+            binding.coordinateTv.text = "Left: ${it.boundingBox().left}," +
+                    "Right: ${it.boundingBox().right}," +
+                    "Top: ${it.boundingBox().top}," +
+                    "Bottom: ${it.boundingBox().bottom},"
             binding.faceBoxOverlay.add(box)
         }
     }
