@@ -31,9 +31,12 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import com.example.facedetectionapp.databinding.ActivityCameraBinding
+import com.example.facedetectionapp.utils.blurFaceDetection.data.BlurFaceHelper
+import com.example.facedetectionapp.utils.blurFaceDetection.presentation.BlurImageAnalyser
+import com.example.facedetectionapp.utils.blurFaceDetection.presentation.log
 import com.example.facedetectionapp.utils.customPermissionRequest
-import com.example.facedetectionapp.utils.faceDetection.domain.FaceBox
 import com.example.facedetectionapp.utils.faceDetection.data.FaceDetectorHelper
+import com.example.facedetectionapp.utils.faceDetection.domain.FaceBox
 import com.example.facedetectionapp.utils.isPermissionGranted
 import com.example.facedetectionapp.utils.openPermissionSetting
 import com.example.facedetectionapp.viewModels.CameraXViewModel
@@ -64,6 +67,7 @@ class CameraActivity : AppCompatActivity() {
     private lateinit var imageCapture: ImageCapture
     private val storagePermission = android.Manifest.permission.WRITE_EXTERNAL_STORAGE
     private lateinit var uri: Uri
+    private lateinit var blurAnalyser: BlurImageAnalyser
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -83,6 +87,14 @@ class CameraActivity : AppCompatActivity() {
 
     private fun init() {
         initTasks()
+        initListeners()
+    }
+
+    private fun initListeners() {
+        blurAnalyser =
+            BlurImageAnalyser(classifier = BlurFaceHelper(applicationContext)) { results ->
+                log(results.toString())
+            }
     }
 
 
@@ -140,7 +152,9 @@ class CameraActivity : AppCompatActivity() {
         val cameraExecutor = Executors.newSingleThreadExecutor()
         imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
             imgProxy = imageProxy
-            detectFace(imgProxy)
+            blurAnalyser.analyze(imageProxy)
+            //detect only if the image is not blurr
+//            detectFace(imgProxy)
         }
         try {
             processCameraProvider.unbindAll()

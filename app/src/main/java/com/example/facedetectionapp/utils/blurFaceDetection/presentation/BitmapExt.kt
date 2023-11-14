@@ -1,7 +1,7 @@
 package com.example.facedetectionapp.utils.blurFaceDetection.presentation
 
 import android.graphics.Bitmap
-import java.lang.IllegalStateException
+import android.util.Log
 
 fun Bitmap.centerCrop(desiredWidth: Int, desiredHeight: Int): Bitmap {
     val xStart = (width - desiredWidth) / 2
@@ -11,4 +11,8 @@ fun Bitmap.centerCrop(desiredWidth: Int, desiredHeight: Int): Bitmap {
         throw IllegalArgumentException("Invalid arguments.")
     }
     return Bitmap.createBitmap(this, xStart, yStart, desiredWidth, desiredHeight)
+}
+fun log(str: String) {
+//    Toast.makeText(this, "AAya", Toast.LENGTH_SHORT).show()
+        Log.e("wtf==", str)
 }

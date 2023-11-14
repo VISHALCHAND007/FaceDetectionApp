@@ -2,6 +2,7 @@ package com.example.facedetectionapp.utils.blurFaceDetection.data
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.util.Log
 import android.view.Surface
 import com.example.facedetectionapp.utils.blurFaceDetection.model.BlurModel
 import org.tensorflow.lite.support.image.TensorImage
@@ -39,7 +40,7 @@ class BlurFaceHelper(
         }
     }
 
-    override fun classifier(bitmap: Bitmap, rotation: Int): List<BlurModel>? {
+    override fun classify(bitmap: Bitmap, rotation: Int): List<BlurModel>? {
         if (classifier == null)
             setUpClassifier()
 
@@ -50,6 +51,7 @@ class BlurFaceHelper(
             .setOrientation(getOrientationFormRotation(rotation))
             .build()
         val results = classifier?.classify(tensorImage, imageProcessingOptions)
+        Log.e("results==", results.toString())
         return results?.flatMap { classifications ->
             classifications.categories.map { category ->
                 BlurModel(
@@ -58,6 +60,7 @@ class BlurFaceHelper(
                 )
             }
         }
+//            ?.distinctBy { it.blurStrength } ?: emptyList()
     }
 
     private fun getOrientationFormRotation(rotation: Int): ImageProcessingOptions.Orientation {
