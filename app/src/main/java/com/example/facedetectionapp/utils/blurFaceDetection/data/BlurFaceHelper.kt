@@ -39,26 +39,7 @@ class BlurFaceHelper(
         }
     }
 
-    override fun classifier(bitmap: Bitmap, rotation: Int): List<BlurModel>? {
-        if (classifier == null)
-            setUpClassifier()
 
-        val imageProcessor = org.tensorflow.lite.support.image.ImageProcessor.Builder().build()
-        val tensorImage = imageProcessor.process(TensorImage.fromBitmap(bitmap))
-
-        val imageProcessingOptions = ImageProcessingOptions.builder()
-            .setOrientation(getOrientationFormRotation(rotation))
-            .build()
-        val results = classifier?.classify(tensorImage, imageProcessingOptions)
-        return results?.flatMap { classifications ->
-            classifications.categories.map { category ->
-                BlurModel(
-                    blurStrength = category.index.toFloat(),
-                    nonBlurStrength = category.index.toFloat()
-                )
-            }
-        }
-    }
 
     private fun getOrientationFormRotation(rotation: Int): ImageProcessingOptions.Orientation {
         return when (rotation) {
@@ -76,6 +57,27 @@ class BlurFaceHelper(
 
             else -> {
                 ImageProcessingOptions.Orientation.BOTTOM_RIGHT
+            }
+        }
+    }
+
+    override fun classify(bitmap: Bitmap, rotation: Int): List<BlurModel>? {
+        if (classifier == null)
+            setUpClassifier()
+
+        val imageProcessor = org.tensorflow.lite.support.image.ImageProcessor.Builder().build()
+        val tensorImage = imageProcessor.process(TensorImage.fromBitmap(bitmap))
+
+        val imageProcessingOptions = ImageProcessingOptions.builder()
+            .setOrientation(getOrientationFormRotation(rotation))
+            .build()
+        val results = classifier?.classify(tensorImage, imageProcessingOptions)
+        return results?.flatMap { classifications ->
+            classifications.categories.map { category ->
+                BlurModel(
+                    blurStrength = category.index.toFloat(),
+                    nonBlurStrength = category.index.toFloat()
+                )
             }
         }
     }
