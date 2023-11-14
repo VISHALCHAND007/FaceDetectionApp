@@ -28,4 +28,8 @@ class BlurImageAnalyser(
         frameSkipCounter++
         image.close()
     }
+    private fun configImg(bitmap: Bitmap): Bitmap {
+
+        return bitmap
+    }
 }
