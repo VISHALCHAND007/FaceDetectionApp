@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.util.Log
 import android.view.Surface
 import com.example.facedetectionapp.utils.blurFaceDetection.model.BlurModel
+import com.example.facedetectionapp.utils.blurFaceDetection.presentation.log
 import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.task.core.BaseOptions
 import org.tensorflow.lite.task.core.vision.ImageProcessingOptions
@@ -18,32 +19,34 @@ class BlurFaceHelper(
     private var classifier: ImageClassifier? = null
     private val model = "model_blur_512.tflite"
 
-    private fun setUpClassifier() {
-        val baseOptions = BaseOptions.builder()
-            .setNumThreads(2)
-            .build()
-
-        val options = ImageClassifier.ImageClassifierOptions.builder()
-            .setBaseOptions(baseOptions)
-            .setMaxResults(maxResults)
-            .setScoreThreshold(threshold)
-            .build()
-
-        try {
-            classifier = ImageClassifier.createFromFileAndOptions(
-                context,
-                model,
-                options
-            )
-        } catch (e: IllegalStateException) {
-            e.printStackTrace()
-        }
-    }
+//    private fun setUpClassifier() {
+//        val baseOptions = BaseOptions.builder()
+//            .setNumThreads(2)
+//            .build()
+//
+//        val options = ImageClassifier.ImageClassifierOptions.builder()
+//            .setBaseOptions(baseOptions)
+//            .setMaxResults(maxResults)
+//            .setScoreThreshold(threshold)
+//            .build()
+//
+//        try {
+//            classifier = ImageClassifier.createFromFileAndOptions(
+//                context,
+//                model,
+//                options
+//            )
+//        } catch (e: IllegalStateException) {
+//            Log.wtf("wtf== classifier error", e.toString())
+//        }
+//    }
+    private fun setUpInterpreter
 
     override fun classify(bitmap: Bitmap, rotation: Int): List<BlurModel>? {
         if (classifier == null)
             setUpClassifier()
 
+        log("inside classify")
         val imageProcessor = org.tensorflow.lite.support.image.ImageProcessor.Builder().build()
         val tensorImage = imageProcessor.process(TensorImage.fromBitmap(bitmap))
 
@@ -51,7 +54,8 @@ class BlurFaceHelper(
             .setOrientation(getOrientationFormRotation(rotation))
             .build()
         val results = classifier?.classify(tensorImage, imageProcessingOptions)
-        Log.e("results==", results.toString())
+        Log.d("Model Output", results?.joinToString("\n") { it.toString() } ?: "No results")
+
         return results?.flatMap { classifications ->
             classifications.categories.map { category ->
                 BlurModel(
