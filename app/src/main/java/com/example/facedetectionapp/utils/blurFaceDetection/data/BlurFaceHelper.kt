@@ -1,70 +1,48 @@
 package com.example.facedetectionapp.utils.blurFaceDetection.data
 
-import android.content.Context
 import android.graphics.Bitmap
-import android.util.Log
 import android.view.Surface
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.example.facedetectionapp.utils.blurFaceDetection.model.BlurModel
 import com.example.facedetectionapp.utils.blurFaceDetection.presentation.log
+import com.google.android.gms.tflite.java.TfLite
+import org.tensorflow.lite.InterpreterApi
+import org.tensorflow.lite.TensorFlowLite
+import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
-import org.tensorflow.lite.task.core.BaseOptions
 import org.tensorflow.lite.task.core.vision.ImageProcessingOptions
-import org.tensorflow.lite.task.gms.vision.classifier.ImageClassifier
+import java.io.File
 
-class BlurFaceHelper(
-    private val context: Context,
-    private val threshold: Float = 0.5f,
-    private val maxResults: Int = 1
-) : BlurClassifier {
-    private var classifier: ImageClassifier? = null
+class BlurFaceHelper : BlurClassifier {
+    private var interpreterApi: InterpreterApi? = null
     private val model = "model_blur_512.tflite"
 
-//    private fun setUpClassifier() {
-//        val baseOptions = BaseOptions.builder()
-//            .setNumThreads(2)
-//            .build()
-//
-//        val options = ImageClassifier.ImageClassifierOptions.builder()
-//            .setBaseOptions(baseOptions)
-//            .setMaxResults(maxResults)
-//            .setScoreThreshold(threshold)
-//            .build()
-//
-//        try {
-//            classifier = ImageClassifier.createFromFileAndOptions(
-//                context,
-//                model,
-//                options
-//            )
-//        } catch (e: IllegalStateException) {
-//            Log.wtf("wtf== classifier error", e.toString())
-//        }
-//    }
-    private fun setUpInterpreter
+    private fun setUpInterpreter() {
+        val tfliteOptions = InterpreterApi.Options().
+        setRuntime(InterpreterApi.Options.TfLiteRuntime.PREFER_SYSTEM_OVER_APPLICATION)
+        interpreterApi = InterpreterApi.create(File(model), tfliteOptions)
+    }
 
-    override fun classify(bitmap: Bitmap, rotation: Int): List<BlurModel>? {
-        if (classifier == null)
-            setUpClassifier()
+    override fun classify(bitmap: Bitmap, rotation: Int): List<BlurModel> {
+        setUpInterpreter()
 
         log("inside classify")
-        val imageProcessor = org.tensorflow.lite.support.image.ImageProcessor.Builder().build()
+        val imageProcessor = ImageProcessor.Builder().build()
         val tensorImage = imageProcessor.process(TensorImage.fromBitmap(bitmap))
 
-        val imageProcessingOptions = ImageProcessingOptions.builder()
+        ImageProcessingOptions.builder()
             .setOrientation(getOrientationFormRotation(rotation))
             .build()
-        val results = classifier?.classify(tensorImage, imageProcessingOptions)
-        Log.d("Model Output", results?.joinToString("\n") { it.toString() } ?: "No results")
+        val outputArray = FloatArray(3)
+        interpreterApi?.run(tensorImage, outputArray)
 
-        return results?.flatMap { classifications ->
-            classifications.categories.map { category ->
-                BlurModel(
-                    blurStrength = category.index.toFloat(),
-                    nonBlurStrength = category.index.toFloat()
-                )
-            }
-        }
-//            ?.distinctBy { it.blurStrength } ?: emptyList()
+        return listOf(
+            BlurModel(
+                blurStrength = outputArray[0],
+                nonBlurStrength = outputArray[1]
+            )
+        )
     }
 
     private fun getOrientationFormRotation(rotation: Int): ImageProcessingOptions.Orientation {

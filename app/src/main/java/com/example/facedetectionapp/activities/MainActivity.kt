@@ -10,7 +10,6 @@ import com.example.facedetectionapp.databinding.ActivityMainBinding
 import com.example.facedetectionapp.utils.customPermissionRequest
 import com.example.facedetectionapp.utils.isPermissionGranted
 import com.example.facedetectionapp.utils.openPermissionSetting
-import org.opencv.android.OpenCVLoader
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding

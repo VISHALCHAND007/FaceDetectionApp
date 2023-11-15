@@ -1,31 +1,27 @@
-package com.example.facedetectionapp.utils.blurFaceDetection.presentation
+package com.example.facedetectionapp.utils.blurFaceDetection.data
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Matrix
-import android.util.Log
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import com.example.facedetectionapp.utils.Constants
-import com.example.facedetectionapp.utils.blurFaceDetection.data.BlurClassifier
 import com.example.facedetectionapp.utils.blurFaceDetection.model.BlurModel
+import com.example.facedetectionapp.utils.blurFaceDetection.presentation.log
 import com.google.android.gms.tflite.java.TfLite
 import org.opencv.android.Utils
 import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
-import org.tensorflow.lite.support.image.ImageProcessor
+import org.tensorflow.lite.TensorFlowLite
 
 class BlurImageAnalyser(
-    private val classifier: BlurClassifier,
     private val onResults: (List<BlurModel>) -> Unit
 ) : ImageAnalysis.Analyzer {
     private var frameSkipCounter = 0
 
     override fun analyze(image: ImageProxy) {
         if (frameSkipCounter % 60 == 0) {
-
             val rotationDegrees = image.imageInfo.rotationDegrees
             var imageBitmap = Bitmap.createBitmap(
                 image.width,
@@ -39,10 +35,10 @@ class BlurImageAnalyser(
 
             try {
                 val resultBitmap: Bitmap = configImg(imageBitmap)
-                val result =
-
+                val result = BlurFaceHelper().classify(resultBitmap, rotationDegrees)
+                onResults(result)
             } catch (e: Exception) {
-                log(e.toString())
+                log(e.message.toString()+ "yahi hai")
             }
         }
         frameSkipCounter++

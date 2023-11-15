@@ -31,8 +31,7 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import com.example.facedetectionapp.databinding.ActivityCameraBinding
-import com.example.facedetectionapp.utils.blurFaceDetection.data.BlurFaceHelper
-import com.example.facedetectionapp.utils.blurFaceDetection.presentation.BlurImageAnalyser
+import com.example.facedetectionapp.utils.blurFaceDetection.data.BlurImageAnalyser
 import com.example.facedetectionapp.utils.blurFaceDetection.presentation.log
 import com.example.facedetectionapp.utils.customPermissionRequest
 import com.example.facedetectionapp.utils.faceDetection.data.FaceDetectorHelper
@@ -40,6 +39,7 @@ import com.example.facedetectionapp.utils.faceDetection.domain.FaceBox
 import com.example.facedetectionapp.utils.isPermissionGranted
 import com.example.facedetectionapp.utils.openPermissionSetting
 import com.example.facedetectionapp.viewModels.CameraXViewModel
+import com.google.android.gms.tflite.java.TfLite
 import com.google.mediapipe.tasks.components.containers.Detection
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import kotlinx.coroutines.CoroutineScope
@@ -86,6 +86,8 @@ class CameraActivity : AppCompatActivity() {
 
         //initialize the library
         OpenCVLoader.initDebug()
+        TfLite.initialize(this@CameraActivity)
+
 
         init()
     }
@@ -97,7 +99,7 @@ class CameraActivity : AppCompatActivity() {
 
     private fun initListeners() {
         blurAnalyser =
-            BlurImageAnalyser(classifier = BlurFaceHelper(applicationContext)) { results ->
+            BlurImageAnalyser { results ->
                 log(results.toString())
             }
     }
