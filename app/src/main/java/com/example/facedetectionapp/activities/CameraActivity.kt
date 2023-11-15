@@ -9,6 +9,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Matrix
+import android.graphics.Rect
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -50,6 +51,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.opencv.android.OpenCVLoader
+import org.opencv.android.Utils
+import org.opencv.core.Mat
+import org.opencv.imgcodecs.Imgcodecs
+import org.opencv.imgproc.Imgproc
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -161,7 +166,7 @@ class CameraActivity : AppCompatActivity() {
             imgProxy = imageProxy
             blurAnalyser.analyze(imageProxy)
             //detect only if the image is not blurr
-//            detectFace(imgProxy)
+            detectFace(imgProxy)
         }
         try {
             processCameraProvider.unbindAll()
@@ -282,11 +287,21 @@ class CameraActivity : AppCompatActivity() {
             val finalBitmap = getBitmapFromView(bitmap, binding.cameraView)
             if (finalBitmap != null) {
                 saveMediaToStorage(finalBitmap)
+//                cropAndSave(finalBitmap)
             }
         } catch (e: Exception) {
             Log.e("Error saving: ", e.toString())
         }
     }
+
+    fun cropAndSave(bitmap: Bitmap, boundingBox: Rect) {
+        // Crop the image based on the bounding box
+        val croppedFace = Bitmap.createBitmap(bitmap, boundingBox.left, boundingBox.top, boundingBox.width(), boundingBox.height())
+
+        // Save the cropped face
+        saveMediaToStorage(croppedFace)
+    }
+
 
     private fun saveMediaToStorage(bitmap: Bitmap) {
         // Generating a file name

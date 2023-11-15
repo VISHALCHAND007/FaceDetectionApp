@@ -1,19 +1,16 @@
 package com.example.facedetectionapp.utils.blurFaceDetection.data
 
-import android.content.Context
 import android.graphics.Bitmap
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import com.example.facedetectionapp.utils.Constants
 import com.example.facedetectionapp.utils.blurFaceDetection.model.BlurModel
 import com.example.facedetectionapp.utils.blurFaceDetection.presentation.log
-import com.google.android.gms.tflite.java.TfLite
 import org.opencv.android.Utils
 import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
-import org.tensorflow.lite.TensorFlowLite
 
 class BlurImageAnalyser(
     private val onResults: (List<BlurModel>) -> Unit
@@ -23,7 +20,7 @@ class BlurImageAnalyser(
     override fun analyze(image: ImageProxy) {
         if (frameSkipCounter % 60 == 0) {
             val rotationDegrees = image.imageInfo.rotationDegrees
-            var imageBitmap = Bitmap.createBitmap(
+            val imageBitmap = Bitmap.createBitmap(
                 image.width,
                 image.height,
                 Bitmap.Config.ARGB_8888
@@ -38,7 +35,7 @@ class BlurImageAnalyser(
                 val result = BlurFaceHelper().classify(resultBitmap, rotationDegrees)
                 onResults(result)
             } catch (e: Exception) {
-                log(e.message.toString()+ "yahi hai")
+                log(e.message.toString())
             }
         }
         frameSkipCounter++
