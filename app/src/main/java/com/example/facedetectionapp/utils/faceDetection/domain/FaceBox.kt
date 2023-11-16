@@ -5,6 +5,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
+import com.example.facedetectionapp.utils.Constants
 import com.example.facedetectionapp.utils.faceDetection.ui.FaceBoxOverlay
 
 class FaceBox(
@@ -14,7 +15,7 @@ class FaceBox(
     ): FaceBoxOverlay.Facebox(faceBoxOverlay) {
 
     private val paint = Paint().apply {
-        color = Color.GREEN
+        color = Constants.color
         style = Paint.Style.STROKE
         strokeWidth = 6.0f
     }

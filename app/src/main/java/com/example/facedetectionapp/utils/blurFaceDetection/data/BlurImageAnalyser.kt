@@ -1,5 +1,6 @@
 package com.example.facedetectionapp.utils.blurFaceDetection.data
 
+import android.content.Context
 import android.graphics.Bitmap
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -11,8 +12,12 @@ import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.Size
 import org.opencv.imgproc.Imgproc
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+
 
 class BlurImageAnalyser(
+    private val context: Context,
     private val onResults: (List<BlurModel>) -> Unit
 ) : ImageAnalysis.Analyzer {
     private var frameSkipCounter = 0
@@ -28,18 +33,21 @@ class BlurImageAnalyser(
             image.use {
                 imageBitmap.copyPixelsFromBuffer(image.planes[0].buffer)
             }
-            image.close()
 
             try {
-                val resultBitmap: Bitmap = configImg(imageBitmap)
-                val result = BlurFaceHelper().classify(resultBitmap, rotationDegrees)
+//                val resultBitmap: Bitmap = configImg(imageBitmap)
+                val result = BlurFaceHelper(context).classify(imageBitmap, rotationDegrees)
                 onResults(result)
             } catch (e: Exception) {
                 log(e.message.toString())
             }
         }
         frameSkipCounter++
+//        image.close()
     }
+
+
+
 
     private fun configImg(bitmap: Bitmap): Bitmap {
         // Convert Bitmap to Mat
@@ -50,7 +58,7 @@ class BlurImageAnalyser(
         Imgproc.cvtColor(inputMat, inputMat, Imgproc.COLOR_BGR2RGB)
 
         // Resize the image
-        val newSize = Size(Constants.desiredWidth, Constants.desiredHeight)
+        val newSize = Size(Constants.desiredWidth.toDouble(), Constants.desiredHeight.toDouble())
         val resizedMat = Mat()
         Imgproc.resize(
             inputMat,
@@ -62,11 +70,11 @@ class BlurImageAnalyser(
         )
 
         // Convert pixel values to the range (0, 1)
-        resizedMat.convertTo(resizedMat, CvType.CV_32FC3, 1.0 / 255.0)
+        resizedMat.convertTo(resizedMat, CvType.CV_32FC4, 1.0 / 255.0)
 
 
 //         Convert back to CV_8U
-        resizedMat.convertTo(resizedMat, CvType.CV_8U)
+        resizedMat.convertTo(resizedMat, CvType.CV_8UC4)
 //        Log.d("Debug==", "Mat dimensions: ${resizedMat.rows()} x ${resizedMat.cols()}")
 //        Log.d("Debug==", "Mat pixel values: ${resizedMat.dump()}")
 

@@ -8,8 +8,9 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Matrix
-import android.graphics.Rect
+import android.graphics.RectF
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -32,6 +33,7 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import com.example.facedetectionapp.databinding.ActivityCameraBinding
+import com.example.facedetectionapp.utils.Constants
 import com.example.facedetectionapp.utils.blurFaceDetection.data.BlurImageAnalyser
 import com.example.facedetectionapp.utils.blurFaceDetection.presentation.log
 import com.example.facedetectionapp.utils.customPermissionRequest
@@ -51,10 +53,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.opencv.android.OpenCVLoader
-import org.opencv.android.Utils
-import org.opencv.core.Mat
-import org.opencv.imgcodecs.Imgcodecs
-import org.opencv.imgproc.Imgproc
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -74,6 +72,7 @@ class CameraActivity : AppCompatActivity() {
     private val storagePermission = android.Manifest.permission.WRITE_EXTERNAL_STORAGE
     private lateinit var uri: Uri
     private lateinit var blurAnalyser: BlurImageAnalyser
+    private lateinit var boundingBox: RectF
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -104,7 +103,7 @@ class CameraActivity : AppCompatActivity() {
 
     private fun initListeners() {
         blurAnalyser =
-            BlurImageAnalyser { results ->
+            BlurImageAnalyser(this@CameraActivity) { results ->
                 log(results.toString())
             }
     }
@@ -166,7 +165,7 @@ class CameraActivity : AppCompatActivity() {
             imgProxy = imageProxy
             blurAnalyser.analyze(imageProxy)
             //detect only if the image is not blurr
-            detectFace(imgProxy)
+//            detectFace(imgProxy)
         }
         try {
             processCameraProvider.unbindAll()
@@ -216,6 +215,7 @@ class CameraActivity : AppCompatActivity() {
                 imgProxy.cropRect,
                 it.boundingBox()
             )
+            boundingBox = it.boundingBox()
             binding.coordinateTv.text = "Left: ${it.boundingBox().left}," +
                     "Right: ${it.boundingBox().right}," +
                     "Top: ${it.boundingBox().top}," +
@@ -283,20 +283,39 @@ class CameraActivity : AppCompatActivity() {
     private fun saveImageWithOverlay(outputFileResults: ImageCapture.OutputFileResults) {
         try {
             uri = outputFileResults.savedUri!!
-            val bitmap = getBitmapFromUri(uri)
+            val bitmap = getBitmapFromUri(uri) //image from gallery
             val finalBitmap = getBitmapFromView(bitmap, binding.cameraView)
             if (finalBitmap != null) {
                 saveMediaToStorage(finalBitmap)
-//                cropAndSave(finalBitmap)
+                cropAndSave(finalBitmap, boundingBox, Constants.color)
             }
         } catch (e: Exception) {
             Log.e("Error saving: ", e.toString())
         }
     }
 
-    fun cropAndSave(bitmap: Bitmap, boundingBox: Rect) {
-        // Crop the image based on the bounding box
-        val croppedFace = Bitmap.createBitmap(bitmap, boundingBox.left, boundingBox.top, boundingBox.width(), boundingBox.height())
+    private fun cropAndSave(originalBitmap: Bitmap, boundingBox: RectF, targetColor: Int) {
+        val width = originalBitmap.width
+        val height = originalBitmap.height
+
+        var left = boundingBox.left.toInt()
+        var right = boundingBox.right.toInt()
+        var top = boundingBox.top.toInt()
+        var bottom = boundingBox.bottom.toInt()
+
+        for (x in 0 until width) {
+            for (y in 0 until height) {
+                if (originalBitmap.getPixel(x, y) == targetColor) {
+                    if (x < left) left = x
+                    if (x >= right) right = x
+                    if (y <= top) top = y
+                    if (y > bottom) bottom = y
+                }
+            }
+        }
+
+        val croppedFace =
+            Bitmap.createBitmap(originalBitmap, left+1, top+1, right - left-1, bottom - top-1)
 
         // Save the cropped face
         saveMediaToStorage(croppedFace)
@@ -304,53 +323,56 @@ class CameraActivity : AppCompatActivity() {
 
 
     private fun saveMediaToStorage(bitmap: Bitmap) {
-        // Generating a file name
-        val filename = "${System.currentTimeMillis()}.jpeg"
+        CoroutineScope(Dispatchers.IO).launch {
 
-        // Output stream
-        var fos: OutputStream? = null
+            // Generating a file name
+            val filename = "${System.currentTimeMillis()}.jpeg"
 
-        // For devices running android >= Q
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // getting the contentResolver
-            this@CameraActivity.contentResolver?.also { resolver ->
+            // Output stream
+            var fos: OutputStream? = null
 
-                // Content resolver will process the content-values
-                val contentValues = ContentValues().apply {
+            // For devices running android >= Q
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // getting the contentResolver
+                this@CameraActivity.contentResolver?.also { resolver ->
 
-                    // putting file information in content values
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-                    put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES)
+                    // Content resolver will process the content-values
+                    val contentValues = ContentValues().apply {
+
+                        // putting file information in content values
+                        put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                        put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                        put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES)
+                    }
+
+                    // Inserting the contentValues to
+                    // contentResolver and getting the Uri
+                    val imageUri: Uri? =
+                        resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+
+                    // Opening an outputstream with the Uri that we got
+                    fos = imageUri?.let { resolver.openOutputStream(it) }
                 }
-
-                // Inserting the contentValues to
-                // contentResolver and getting the Uri
-                val imageUri: Uri? =
-                    resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-
-                // Opening an outputstream with the Uri that we got
-                fos = imageUri?.let { resolver.openOutputStream(it) }
+            } else {
+                // These for devices running on android < Q
+                val imagesDir =
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                val image = File(imagesDir, filename)
+                fos = FileOutputStream(image)
             }
-        } else {
-            // These for devices running on android < Q
-            val imagesDir =
-                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-            val image = File(imagesDir, filename)
-            fos = FileOutputStream(image)
-        }
 
-        fos?.use {
-            // Finally writing the bitmap to the output stream that we opened
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 100, it)
-            runOnUiThread {
-                Toast.makeText(
-                    this@CameraActivity,
-                    "Captured.",
-                    Toast.LENGTH_SHORT
-                ).show()
+            fos?.use {
+                // Finally writing the bitmap to the output stream that we opened
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, it)
+                runOnUiThread {
+                    Toast.makeText(
+                        this@CameraActivity,
+                        "Captured.",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+                deleteFileWithUri(uri)
             }
-            deleteFileWithUri(uri)
         }
     }
 

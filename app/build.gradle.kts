@@ -62,8 +62,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
     //tensorFlowLite
     implementation("org.tensorflow:tensorflow-lite-task-vision-play-services:0.4.2")
+    implementation("org.tensorflow:tensorflow-lite:2.12.0")
     implementation("com.google.android.gms:play-services-tflite-gpu:16.2.0")
-//    implementation("org.tensorflow:tensorflow-lite:2.5.0")
 
     //open-cv
     implementation("com.quickbirdstudios:opencv-contrib:4.5.3.0")
