@@ -138,7 +138,7 @@ class FaceDetectorHelper(
                 Bitmap.Config.ARGB_8888
             )
         imageProxy.use { bitmapBuffer.copyPixelsFromBuffer(imageProxy.planes[0].buffer) }
-        imageProxy.close()
+//        imageProxy.close()
         // Rotate the frame received from the camera to be in the same direction as it'll be shown
         val matrix =
             Matrix().apply {

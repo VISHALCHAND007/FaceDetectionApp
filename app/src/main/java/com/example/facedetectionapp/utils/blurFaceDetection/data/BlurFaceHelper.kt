@@ -3,13 +3,10 @@ package com.example.facedetectionapp.utils.blurFaceDetection.data
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.view.Surface
 import com.example.facedetectionapp.R
 import com.example.facedetectionapp.utils.Constants
 import com.example.facedetectionapp.utils.blurFaceDetection.model.BlurModel
-import com.example.facedetectionapp.utils.blurFaceDetection.presentation.log
 import org.tensorflow.lite.InterpreterApi
-import org.tensorflow.lite.task.core.vision.ImageProcessingOptions
 import java.io.FileInputStream
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -20,7 +17,7 @@ import java.nio.channels.FileChannel
 class BlurFaceHelper(private val context: Context) : BlurClassifier {
     private var interpreterApi: InterpreterApi? = null
     private val model = "model_blur_512.tflite"
-    private val CHANNELS = 3
+    private  val CHANNELS = 3
     private val BATCH_SIZE = 1
 
     private fun setUpInterpreter() {
@@ -43,13 +40,22 @@ class BlurFaceHelper(private val context: Context) : BlurClassifier {
     override fun classify(bitmap: Bitmap, rotation: Int): List<BlurModel> {
         setUpInterpreter()
 
-        log("inside classify")
         val outputArray = processBitmap(bitmap)
+        //test
+//        val drawable = context.resources.getDrawable(R.drawable.image)
+//        val width = drawable.intrinsicWidth
+//        val height = drawable.intrinsicHeight
+//
+//        val bitmap1 = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+//        val canvas = Canvas(bitmap1)
+//        drawable.setBounds(0, 0, canvas.width, canvas.height)
+//        drawable.draw(canvas)
+//        val outputArray = processBitmap(bitmap1)
 
         return listOf(
             BlurModel(
                 blurStrength = outputArray[0][0],
-                nonBlurStrength = outputArray[0][0]
+                nonBlurStrength = outputArray[0][1]
             )
         )
     }
@@ -96,29 +102,7 @@ class BlurFaceHelper(private val context: Context) : BlurClassifier {
                 2
             )
         }
-//        val outputArray: Any? = null
         interpreterApi?.run(inputBuffer, outputArray)
         return outputArray
-    }
-
-
-    private fun getOrientationFormRotation(rotation: Int): ImageProcessingOptions.Orientation {
-        return when (rotation) {
-            Surface.ROTATION_0 -> {
-                ImageProcessingOptions.Orientation.RIGHT_TOP
-            }
-
-            Surface.ROTATION_90 -> {
-                ImageProcessingOptions.Orientation.TOP_LEFT
-            }
-
-            Surface.ROTATION_180 -> {
-                ImageProcessingOptions.Orientation.RIGHT_BOTTOM
-            }
-
-            else -> {
-                ImageProcessingOptions.Orientation.BOTTOM_RIGHT
-            }
-        }
     }
 }

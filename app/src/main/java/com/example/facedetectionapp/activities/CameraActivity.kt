@@ -8,7 +8,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.RectF
 import android.net.Uri
@@ -67,7 +66,7 @@ class CameraActivity : AppCompatActivity() {
     private lateinit var imageAnalysis: ImageAnalysis
     private val cameraxViewModel = viewModels<CameraXViewModel>()
     private lateinit var faceDetectorHelper: FaceDetectorHelper
-    private lateinit var imgProxy: ImageProxy
+    private var imgProxy: ImageProxy? = null
     private lateinit var imageCapture: ImageCapture
     private val storagePermission = android.Manifest.permission.WRITE_EXTERNAL_STORAGE
     private lateinit var uri: Uri
@@ -92,7 +91,6 @@ class CameraActivity : AppCompatActivity() {
         OpenCVLoader.initDebug()
         TfLite.initialize(this@CameraActivity)
 
-
         init()
     }
 
@@ -102,10 +100,19 @@ class CameraActivity : AppCompatActivity() {
     }
 
     private fun initListeners() {
-        blurAnalyser =
-            BlurImageAnalyser(this@CameraActivity) { results ->
-                log(results.toString())
+        blurAnalyser = BlurImageAnalyser(this@CameraActivity) { results ->
+            val blurStrength = results[0].blurStrength
+            val nonBlurStrength = results[0].nonBlurStrength
+            log("blur: $blurStrength===> nonBlur: $nonBlurStrength")
+            if (blurStrength < nonBlurStrength) {
+                log("Non-blur image")
+                imgProxy?.let { detectFace(it) }
+            } else {
+                //image is blur
+                log("Blur image")
+                createImageProxy()
             }
+        }
     }
 
 
@@ -160,13 +167,8 @@ class CameraActivity : AppCompatActivity() {
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
             .build()
 
-        val cameraExecutor = Executors.newSingleThreadExecutor()
-        imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
-            imgProxy = imageProxy
-            blurAnalyser.analyze(imageProxy)
-            //detect only if the image is not blurr
-//            detectFace(imgProxy)
-        }
+        createImageProxy()
+
         try {
             processCameraProvider.unbindAll()
             processCameraProvider.bindToLifecycle(
@@ -178,6 +180,14 @@ class CameraActivity : AppCompatActivity() {
             )
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    private fun createImageProxy() {
+        val cameraExecutor = Executors.newSingleThreadExecutor()
+        imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
+            imgProxy = imageProxy
+            blurAnalyser.analyze(imageProxy)
         }
     }
 
@@ -212,7 +222,7 @@ class CameraActivity : AppCompatActivity() {
         detections.forEach {
             val box = FaceBox(
                 binding.faceBoxOverlay,
-                imgProxy.cropRect,
+                imgProxy!!.cropRect,
                 it.boundingBox()
             )
             boundingBox = it.boundingBox()
@@ -315,7 +325,13 @@ class CameraActivity : AppCompatActivity() {
         }
 
         val croppedFace =
-            Bitmap.createBitmap(originalBitmap, left+1, top+1, right - left-1, bottom - top-1)
+            Bitmap.createBitmap(
+                originalBitmap,
+                left + 1,
+                top + 1,
+                right - left - 1,
+                bottom - top - 1
+            )
 
         // Save the cropped face
         saveMediaToStorage(croppedFace)
@@ -417,7 +433,7 @@ class CameraActivity : AppCompatActivity() {
         return combinedBitmap
     }
 
-    fun flipCanvasHorizontally(canvas: Canvas) {
+    private fun flipCanvasHorizontally(canvas: Canvas) {
         val matrix = Matrix()
         matrix.setScale(-1f, 1f, canvas.width / 2f, 0f) // Flip horizontally around the center
         canvas.concat(matrix)
