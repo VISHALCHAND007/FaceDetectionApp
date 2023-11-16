@@ -2,8 +2,6 @@ package com.example.facedetectionapp.utils.blurFaceDetection.data
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import com.example.facedetectionapp.R
 import com.example.facedetectionapp.utils.Constants
 import com.example.facedetectionapp.utils.blurFaceDetection.model.BlurModel
 import org.tensorflow.lite.InterpreterApi

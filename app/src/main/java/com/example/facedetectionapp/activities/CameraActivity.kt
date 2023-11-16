@@ -18,7 +18,6 @@ import android.provider.MediaStore
 import android.util.Log
 import android.util.Size
 import android.view.View
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -72,6 +71,7 @@ class CameraActivity : AppCompatActivity() {
     private lateinit var uri: Uri
     private lateinit var blurAnalyser: BlurImageAnalyser
     private lateinit var boundingBox: RectF
+    private lateinit var status: String
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -108,13 +108,21 @@ class CameraActivity : AppCompatActivity() {
             binding.thresholdTv.text = "blur: $blurStrength===> nonBlur: $nonBlurStrength"
             if (blurStrength < nonBlurStrength) {
                 log("Non-blur image")
+                status = "Non-blur image"
+                setStatus()
                 imgProxy?.let { detectFace(it) }
             } else {
                 //image is blur
                 log("Blur image")
+                status = "Blur image"
+                setStatus()
                 createImageProxy()
             }
         }
+    }
+
+    private fun setStatus() {
+        binding.statusTv.text = status
     }
 
 
@@ -229,10 +237,10 @@ class CameraActivity : AppCompatActivity() {
                 it.boundingBox()
             )
             boundingBox = it.boundingBox()
-            binding.coordinateTv.text = "Left: ${it.boundingBox().left}," +
-                    "Right: ${it.boundingBox().right}," +
-                    "Top: ${it.boundingBox().top}," +
-                    "Bottom: ${it.boundingBox().bottom},"
+//            binding.statusTv.text = "Left: ${it.boundingBox().left}," +
+//                    "Right: ${it.boundingBox().right}," +
+//                    "Top: ${it.boundingBox().top}," +
+//                    "Bottom: ${it.boundingBox().bottom},"
             binding.faceBoxOverlay.add(box)
         }
     }
@@ -299,44 +307,53 @@ class CameraActivity : AppCompatActivity() {
             val bitmap = getBitmapFromUri(uri) //image from gallery
             val finalBitmap = getBitmapFromView(bitmap, binding.cameraView)
             if (finalBitmap != null) {
+                status = "Saved with overlay"
+                setStatus()
                 saveMediaToStorage(finalBitmap)
-                cropAndSave(finalBitmap, boundingBox, Constants.color)
+                cropAndSave(finalBitmap, Constants.color)
             }
         } catch (e: Exception) {
             Log.e("Error saving: ", e.toString())
         }
     }
 
-    private fun cropAndSave(originalBitmap: Bitmap, boundingBox: RectF, targetColor: Int) {
+    private fun cropAndSave(originalBitmap: Bitmap, targetColor: Int) {
         val width = originalBitmap.width
         val height = originalBitmap.height
 
-        var left = boundingBox.left.toInt()
-        var right = boundingBox.right.toInt()
-        var top = boundingBox.top.toInt()
-        var bottom = boundingBox.bottom.toInt()
+        var left = width
+        var right = 0
+        var top = height
+        var bottom = 0
 
         for (x in 0 until width) {
             for (y in 0 until height) {
                 if (originalBitmap.getPixel(x, y) == targetColor) {
-                    if (x < left) left = x
-                    if (x >= right) right = x
-                    if (y <= top) top = y
-                    if (y > bottom) bottom = y
+                    left = minOf(left, x)
+                    right = maxOf(right, x)
+                    top = minOf(top, y)
+                    bottom = maxOf(bottom, y)
                 }
             }
         }
+        // Ensure that the bounding box is within the image bounds
+        left = maxOf(0, left)
+        right = minOf(width - 1, right)
+        top = maxOf(0, top)
+        bottom = minOf(height - 1, bottom)
 
         val croppedFace =
             Bitmap.createBitmap(
                 originalBitmap,
-                left + 1,
-                top + 1,
-                right - left - 1,
-                bottom - top - 1
+                left,
+                top,
+                right - left + 1,
+                bottom - top + 1
             )
 
         // Save the cropped face
+        status = "Cropped image saved"
+        setStatus()
         saveMediaToStorage(croppedFace)
     }
 
@@ -383,13 +400,6 @@ class CameraActivity : AppCompatActivity() {
             fos?.use {
                 // Finally writing the bitmap to the output stream that we opened
                 bitmap.compress(Bitmap.CompressFormat.JPEG, 100, it)
-                runOnUiThread {
-                    Toast.makeText(
-                        this@CameraActivity,
-                        "Saved",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
                 deleteFileWithUri(uri)
             }
         }
