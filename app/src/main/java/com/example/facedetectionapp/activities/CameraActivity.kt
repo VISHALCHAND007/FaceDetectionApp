@@ -99,11 +99,13 @@ class CameraActivity : AppCompatActivity() {
         initListeners()
     }
 
+    @SuppressLint("SetTextI18n")
     private fun initListeners() {
         blurAnalyser = BlurImageAnalyser(this@CameraActivity) { results ->
             val blurStrength = results[0].blurStrength
             val nonBlurStrength = results[0].nonBlurStrength
             log("blur: $blurStrength===> nonBlur: $nonBlurStrength")
+            binding.thresholdTv.text = "blur: $blurStrength===> nonBlur: $nonBlurStrength"
             if (blurStrength < nonBlurStrength) {
                 log("Non-blur image")
                 imgProxy?.let { detectFace(it) }
@@ -188,6 +190,7 @@ class CameraActivity : AppCompatActivity() {
         imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
             imgProxy = imageProxy
             blurAnalyser.analyze(imageProxy)
+//            detectFace(imageProxy)
         }
     }
 
@@ -383,7 +386,7 @@ class CameraActivity : AppCompatActivity() {
                 runOnUiThread {
                     Toast.makeText(
                         this@CameraActivity,
-                        "Captured.",
+                        "Saved",
                         Toast.LENGTH_SHORT
                     ).show()
                 }
