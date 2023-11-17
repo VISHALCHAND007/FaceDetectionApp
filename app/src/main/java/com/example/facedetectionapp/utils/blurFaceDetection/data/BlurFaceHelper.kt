@@ -35,7 +35,7 @@ class BlurFaceHelper(private val context: Context) : BlurClassifier {
         return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
     }
 
-    override fun classify(bitmap: Bitmap, rotation: Int): List<BlurModel> {
+    override fun classify(bitmap: Bitmap): List<BlurModel> {
         setUpInterpreter()
 
         val outputArray = processBitmap(bitmap)

@@ -15,7 +15,7 @@ class BlurImageAnalyser(
     private var frameSkipCounter = 0
 
     override fun analyze(image: ImageProxy) {
-            val rotationDegrees = image.imageInfo.rotationDegrees
+//            val rotationDegrees = image.imageInfo.rotationDegrees
             val imageBitmap = Bitmap.createBitmap(
                 image.width,
                 image.height,
@@ -26,7 +26,7 @@ class BlurImageAnalyser(
             }
 
             try {
-                val result = BlurFaceHelper(context).classify(imageBitmap, rotationDegrees)
+                val result = BlurFaceHelper(context).classify(imageBitmap)
                 onResults(result)
             } catch (e: Exception) {
                 log(e.message.toString()+"ye hai")

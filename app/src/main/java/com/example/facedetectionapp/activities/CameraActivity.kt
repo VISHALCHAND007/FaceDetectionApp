@@ -32,7 +32,9 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import com.example.facedetectionapp.databinding.ActivityCameraBinding
 import com.example.facedetectionapp.utils.Constants
+import com.example.facedetectionapp.utils.blurFaceDetection.data.BlurFaceHelper
 import com.example.facedetectionapp.utils.blurFaceDetection.data.BlurImageAnalyser
+import com.example.facedetectionapp.utils.blurFaceDetection.model.BlurModel
 import com.example.facedetectionapp.utils.blurFaceDetection.presentation.log
 import com.example.facedetectionapp.utils.customPermissionRequest
 import com.example.facedetectionapp.utils.faceDetection.data.FaceDetectorHelper
@@ -46,7 +48,6 @@ import com.google.mediapipe.tasks.vision.core.RunningMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -71,7 +72,7 @@ class CameraActivity : AppCompatActivity() {
     private lateinit var uri: Uri
     private lateinit var blurAnalyser: BlurImageAnalyser
     private lateinit var boundingBox: RectF
-    private lateinit var status: String
+    private lateinit var croppedFace: Bitmap
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -102,27 +103,39 @@ class CameraActivity : AppCompatActivity() {
     @SuppressLint("SetTextI18n")
     private fun initListeners() {
         blurAnalyser = BlurImageAnalyser(this@CameraActivity) { results ->
-            val blurStrength = results[0].blurStrength
-            val nonBlurStrength = results[0].nonBlurStrength
-            log("blur: $blurStrength===> nonBlur: $nonBlurStrength")
-            binding.thresholdTv.text = "blur: $blurStrength===> nonBlur: $nonBlurStrength"
-            if (blurStrength < nonBlurStrength) {
-                log("Non-blur image")
-                status = "Non-blur image"
-                setStatus()
-                imgProxy?.let { detectFace(it) }
-            } else {
-                //image is blur
-                log("Blur image")
-                status = "Blur image"
-                setStatus()
-                createImageProxy()
-            }
+            analyseBlurriness(results)
         }
     }
 
-    private fun setStatus() {
-        binding.statusTv.text = status
+    @SuppressLint("SetTextI18n")
+    private fun analyseBlurriness(results: List<BlurModel>) {
+        /*
+                 Flow will change now first, we will check for the blur strength of the cropped image
+                 and base no that action will be took:
+                 i. If image is blurred -> retake the next frame with start
+                 ii. If image is non-blurred -> save it to gallery and close the image proxy
+        */
+        val blurStrength = results[0].blurStrength
+        val nonBlurStrength = results[0].nonBlurStrength
+        log("blur: $blurStrength===> nonBlur: $nonBlurStrength")
+        binding.thresholdTv.text = "blur: $blurStrength===> nonBlur: $nonBlurStrength"
+        if (blurStrength < nonBlurStrength) {
+            //non-blur image
+            log("Non-blur image")
+            setStatus("Non-blur image")
+            // Save the cropped face
+            setStatus("Cropped Image Saved")
+            saveMediaToStorage(croppedFace)
+        } else {
+            //image is blur
+            log("Blur image")
+            setStatus("Blur image")
+            createImageProxy()
+        }
+    }
+
+    private fun setStatus(str: String) {
+        binding.statusTv.text = str
     }
 
 
@@ -197,8 +210,7 @@ class CameraActivity : AppCompatActivity() {
         val cameraExecutor = Executors.newSingleThreadExecutor()
         imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
             imgProxy = imageProxy
-            blurAnalyser.analyze(imageProxy)
-//            detectFace(imageProxy)
+            detectFace(imageProxy)
         }
     }
 
@@ -211,16 +223,11 @@ class CameraActivity : AppCompatActivity() {
         setBoxes(detections)
         //capture
         if (!detections.isNullOrEmpty()) {
-            if (takePictureJob == null || takePictureJob?.isCompleted == true) {
-                // Start a new coroutine to take a picture every 5 seconds
-                takePictureJob = CoroutineScope(Dispatchers.IO).launch {
-                    while (isActive) {
-                        // Take a picture
-                        withContext(Dispatchers.Main) {
-                            clickImage()
-                        }
-                        // Delay for 5 seconds before taking the next picture
-                        delay(5000)
+            CoroutineScope(Dispatchers.IO).launch {
+                while (isActive) {
+                    // Take a picture
+                    withContext(Dispatchers.Main) {
+                        clickImage()
                     }
                 }
             }
@@ -246,6 +253,7 @@ class CameraActivity : AppCompatActivity() {
     }
 
     private fun detectFace(imageProxy: ImageProxy) {
+//        setStatus("Detecting face...")
         faceDetectorHelper.detectLivestreamFrame(
             imageProxy = imageProxy,
         )
@@ -288,6 +296,7 @@ class CameraActivity : AppCompatActivity() {
                 object : ImageCapture.OnImageSavedCallback {
                     override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                         CoroutineScope(Dispatchers.IO).launch {
+                            setStatus("Image Clicked")
                             saveImageWithOverlay(outputFileResults)
                         }
                     }
@@ -307,8 +316,7 @@ class CameraActivity : AppCompatActivity() {
             val bitmap = getBitmapFromUri(uri) //image from gallery
             val finalBitmap = getBitmapFromView(bitmap, binding.cameraView)
             if (finalBitmap != null) {
-                status = "Saved with overlay"
-                setStatus()
+                setStatus("Saved with overlay")
                 saveMediaToStorage(finalBitmap)
                 cropAndSave(finalBitmap, Constants.color)
             }
@@ -318,6 +326,7 @@ class CameraActivity : AppCompatActivity() {
     }
 
     private fun cropAndSave(originalBitmap: Bitmap, targetColor: Int) {
+        setStatus("Cropping the face.")
         val width = originalBitmap.width
         val height = originalBitmap.height
 
@@ -342,7 +351,7 @@ class CameraActivity : AppCompatActivity() {
         top = maxOf(0, top)
         bottom = minOf(height - 1, bottom)
 
-        val croppedFace =
+        croppedFace =
             Bitmap.createBitmap(
                 originalBitmap,
                 left,
@@ -350,13 +359,18 @@ class CameraActivity : AppCompatActivity() {
                 right - left + 1,
                 bottom - top + 1
             )
-
-        // Save the cropped face
-        status = "Cropped image saved"
-        setStatus()
-        saveMediaToStorage(croppedFace)
+        checkBlurriness()
     }
 
+    private fun checkBlurriness() {
+        setStatus("Checking blurriness")
+        try {
+            val results = BlurFaceHelper(this@CameraActivity).classify(croppedFace)
+            analyseBlurriness(results)
+        } catch (e: Exception) {
+            log(e.message.toString())
+        }
+    }
 
     private fun saveMediaToStorage(bitmap: Bitmap) {
         CoroutineScope(Dispatchers.IO).launch {

@@ -19,7 +19,7 @@ class FaceDetectorHelper(
     val context: Context,
     var threshold: Float = THRESHOLD_DEFAULT,
     var currentDelegate: Int = DELEGATE_CPU,
-    var runningMode: RunningMode = RunningMode.LIVE_STREAM,
+    var runningMode: RunningMode = RunningMode.IMAGE,
     // The listener is only used when running in RunningMode.LIVE_STREAM
     var faceDetectorListener: DetectorListener? = null
 ) {
