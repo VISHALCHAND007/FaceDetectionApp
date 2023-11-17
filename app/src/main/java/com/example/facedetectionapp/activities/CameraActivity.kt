@@ -358,6 +358,7 @@ class CameraActivity : AppCompatActivity() {
                 bottom - top + 1
             )
         checkBlurriness()
+
     }
 
     private fun checkBlurriness() {
