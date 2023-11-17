@@ -14,5 +14,5 @@ fun Bitmap.centerCrop(desiredWidth: Int, desiredHeight: Int): Bitmap {
 }
 
 fun log(str: String) {
-    Log.wtf("wtf==", str)
+    Log.wtf("blur==", str)
 }
