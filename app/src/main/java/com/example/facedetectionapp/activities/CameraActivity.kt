@@ -47,6 +47,8 @@ import com.google.mediapipe.tasks.components.containers.Detection
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -112,7 +114,7 @@ class CameraActivity : AppCompatActivity() {
                  Flow will change now first, we will check for the blur strength of the cropped image
                  and base no that action will be took:
                  i. If image is blurred -> retake the next frame with start
-                 ii. If image is non-blurred -> save it to gallery and close the image proxy
+                 ii. If image is non-blurred -> save it to gallery and close the image proxy &
         */
         val blurStrength = results[0].blurStrength
         val nonBlurStrength = results[0].nonBlurStrength
@@ -125,6 +127,8 @@ class CameraActivity : AppCompatActivity() {
             // Save the cropped face
             setStatus("Cropped Image Saved")
             saveMediaToStorage(croppedFace)
+            imgProxy = null
+            faceDetectorHelper.clearFaceDetector()
         } else {
             //image is blur
             log("Blur image")
@@ -177,6 +181,7 @@ class CameraActivity : AppCompatActivity() {
                     }
 
                     override fun onResults(resultBundle: FaceDetectorHelper.ResultBundle) {
+//                        setStatus("Face Detected...")
                         setFaceBoxesAndCapture(resultBundle)
                     }
                 }
@@ -222,11 +227,16 @@ class CameraActivity : AppCompatActivity() {
         setBoxes(detections)
         //capture
         if (!detections.isNullOrEmpty()) {
-            CoroutineScope(Dispatchers.IO).launch {
-                while (isActive) {
-                    // Take a picture
-                    withContext(Dispatchers.Main) {
-                        clickImage()
+            if (takePictureJob == null || takePictureJob?.isCompleted == true) {
+                // Start a new coroutine to take a picture every 5 seconds
+                takePictureJob = CoroutineScope(Dispatchers.IO).launch {
+                    while (isActive) {
+                        // Take a picture
+                        withContext(Dispatchers.Main) {
+                            clickImage()
+                        }
+                        // Delay for 5 seconds before taking the next picture
+                        delay(5000)
                     }
                 }
             }
@@ -252,7 +262,6 @@ class CameraActivity : AppCompatActivity() {
     }
 
     private fun detectFace(imageProxy: ImageProxy) {
-//        setStatus("Detecting face...")
         faceDetectorHelper.detectLivestreamFrame(
             imageProxy = imageProxy,
         )
@@ -261,6 +270,7 @@ class CameraActivity : AppCompatActivity() {
     companion object {
         const val DEFAULT_WIDTH = 1280
         const val DEFAULT_HEIGHT = 720
+        var takePictureJob: Job? = null
         fun start(context: Context) {
             Intent(context, CameraActivity::class.java).also {
                 context.startActivity(it)
