@@ -47,7 +47,6 @@ import com.google.mediapipe.tasks.components.containers.Detection
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -262,7 +261,6 @@ class CameraActivity : AppCompatActivity() {
     companion object {
         const val DEFAULT_WIDTH = 1280
         const val DEFAULT_HEIGHT = 720
-        var takePictureJob: Job? = null
         fun start(context: Context) {
             Intent(context, CameraActivity::class.java).also {
                 context.startActivity(it)
@@ -318,14 +316,14 @@ class CameraActivity : AppCompatActivity() {
             if (finalBitmap != null) {
                 setStatus("Saved with overlay")
                 saveMediaToStorage(finalBitmap)
-                cropAndSave(finalBitmap, Constants.color)
+                cropAndSave(finalBitmap)
             }
         } catch (e: Exception) {
             Log.e("Error saving: ", e.toString())
         }
     }
 
-    private fun cropAndSave(originalBitmap: Bitmap, targetColor: Int) {
+    private fun cropAndSave(originalBitmap: Bitmap) {
         setStatus("Cropping the face.")
         val width = originalBitmap.width
         val height = originalBitmap.height
@@ -337,7 +335,7 @@ class CameraActivity : AppCompatActivity() {
 
         for (x in 0 until width) {
             for (y in 0 until height) {
-                if (originalBitmap.getPixel(x, y) == targetColor) {
+                if (originalBitmap.getPixel(x, y) == Constants.color) {
                     left = minOf(left, x)
                     right = maxOf(right, x)
                     top = minOf(top, y)
@@ -444,7 +442,7 @@ class CameraActivity : AppCompatActivity() {
                 // Create a new bitmap with the same size as the original bitmap
                 combinedBitmap =
                     Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(combinedBitmap!!)
+                val canvas = Canvas(combinedBitmap)
 
                 // Draw the original bitmap
                 canvas.drawBitmap(bitmap, 0f, 0f, null)
