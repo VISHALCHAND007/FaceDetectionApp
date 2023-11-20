@@ -30,6 +30,7 @@ import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
+import com.example.facedetectionapp.caching.MyLRUCache
 import com.example.facedetectionapp.databinding.ActivityCameraBinding
 import com.example.facedetectionapp.utils.Constants
 import com.example.facedetectionapp.utils.blurFaceDetection.data.BlurFaceHelper
@@ -57,6 +58,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.OutputStream
+import java.util.Locale
 import java.util.concurrent.Executors
 
 class CameraActivity : AppCompatActivity() {
@@ -74,6 +76,10 @@ class CameraActivity : AppCompatActivity() {
     private lateinit var blurAnalyser: BlurImageAnalyser
     private lateinit var boundingBox: RectF
     private lateinit var croppedFace: Bitmap
+    private var timer = ""
+    private var sec = 0
+    private lateinit var statusText: String
+    private lateinit var myLRUCache: MyLRUCache
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -93,12 +99,31 @@ class CameraActivity : AppCompatActivity() {
         OpenCVLoader.initDebug()
         TfLite.initialize(this@CameraActivity)
 
+        CoroutineScope(Dispatchers.Main).launch {
+            while (true) {
+                val seconds = sec % 60
+                timer = String.format(Locale.getDefault(), "%02d", seconds)
+                sec++
+                delay(1000)
+            }
+        }
+
         init()
+
     }
 
     private fun init() {
+        initElements()
         initTasks()
         initListeners()
+    }
+
+    private fun initElements() {
+        //initializing elements used in caching
+        // Create an instance of your custom LRU cache with a specified max size
+        val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt()
+        val cacheSize = maxMemory / 8 // Use 1/8th of the available memory
+        myLRUCache = MyLRUCache(cacheSize)
     }
 
     @SuppressLint("SetTextI18n")
@@ -120,19 +145,22 @@ class CameraActivity : AppCompatActivity() {
         val nonBlurStrength = results[0].nonBlurStrength
         log("blur: $blurStrength===> nonBlur: $nonBlurStrength")
         binding.thresholdTv.text = "blur: $blurStrength===> nonBlur: $nonBlurStrength"
+
+        statusText = "Received Results of blurriness $sec"
+        log(statusText)
         if (blurStrength < nonBlurStrength) {
             //non-blur image
             log("Non-blur image")
-            setStatus("Non-blur image")
+//            setStatus("Non-blur image")
             // Save the cropped face
-            setStatus("Cropped Image Saved")
+//            setStatus("Cropped Image Saved")
             saveMediaToStorage(croppedFace)
             imgProxy = null
             faceDetectorHelper.clearFaceDetector()
         } else {
             //image is blur
             log("Blur image")
-            setStatus("Blur image")
+//            setStatus("Blur image")
             createImageProxy()
         }
     }
@@ -181,7 +209,8 @@ class CameraActivity : AppCompatActivity() {
                     }
 
                     override fun onResults(resultBundle: FaceDetectorHelper.ResultBundle) {
-//                        setStatus("Face Detected...")
+//                        statusText = "Face detected: $sec"
+//                        log(statusText)
                         setFaceBoxesAndCapture(resultBundle)
                     }
                 }
@@ -271,6 +300,9 @@ class CameraActivity : AppCompatActivity() {
         const val DEFAULT_WIDTH = 1280
         const val DEFAULT_HEIGHT = 720
         var takePictureJob: Job? = null
+        const val NORMAL_IMG = "normalImg"
+        const val OVERLAY_IMG = "overlayImg"
+        const val CROPPED_IMG = "croppedImg"
         fun start(context: Context) {
             Intent(context, CameraActivity::class.java).also {
                 context.startActivity(it)
@@ -279,6 +311,9 @@ class CameraActivity : AppCompatActivity() {
     }
 
     private fun clickImage() {
+        statusText = "Clicking Image $sec"
+        log(statusText)
+
         if (isPermissionGranted(storagePermission)) {
             val name =
                 "${Environment.getExternalStorageDirectory()} + ${System.currentTimeMillis()}"
@@ -304,7 +339,8 @@ class CameraActivity : AppCompatActivity() {
                 object : ImageCapture.OnImageSavedCallback {
                     override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                         CoroutineScope(Dispatchers.IO).launch {
-                            setStatus("Image Clicked")
+                            statusText = "Image Saved $sec"
+                            log(statusText)
                             saveImageWithOverlay(outputFileResults)
                         }
                     }
@@ -319,13 +355,18 @@ class CameraActivity : AppCompatActivity() {
     }
 
     private fun saveImageWithOverlay(outputFileResults: ImageCapture.OutputFileResults) {
+        statusText = "Saving with facebox $sec"
+        log(statusText)
         try {
             uri = outputFileResults.savedUri!!
             val bitmap = getBitmapFromUri(uri) //image from gallery
             val finalBitmap = getBitmapFromView(bitmap, binding.cameraView)
             if (finalBitmap != null) {
-                setStatus("Saved with overlay")
+//                setStatus("Saved with overlay")
+                //new flow save everything in cache until we get the non-blur image classified
                 saveMediaToStorage(finalBitmap)
+                statusText = "Saved Image with facebox $sec"
+                log(statusText)
                 cropAndSave(finalBitmap)
             }
         } catch (e: Exception) {
@@ -334,7 +375,8 @@ class CameraActivity : AppCompatActivity() {
     }
 
     private fun cropAndSave(originalBitmap: Bitmap) {
-        setStatus("Cropping the face.")
+        statusText = "Cropping face $sec"
+        log(statusText)
         val width = originalBitmap.width
         val height = originalBitmap.height
 
@@ -367,12 +409,15 @@ class CameraActivity : AppCompatActivity() {
                 right - left + 1,
                 bottom - top + 1
             )
+        statusText = "Cropping finished $sec"
+        log(statusText)
         checkBlurriness()
 
     }
 
     private fun checkBlurriness() {
-        setStatus("Checking blurriness")
+        statusText = "Checking blurriness $sec"
+        log(statusText)
         try {
             val results = BlurFaceHelper(this@CameraActivity).classify(croppedFace)
             analyseBlurriness(results)
