@@ -15,10 +15,8 @@ import java.nio.channels.FileChannel
 class BlurFaceHelper(private val context: Context) : BlurClassifier {
     private var interpreterApi: InterpreterApi? = null
     private val model = "model_blur_512.tflite"
-    private  val CHANNELS = 3
-    private val BATCH_SIZE = 1
 
-    private fun setUpInterpreter() {
+    fun setUpInterpreter() {
         val tfliteOptions = InterpreterApi.Options()
             .setRuntime(InterpreterApi.Options.TfLiteRuntime.FROM_APPLICATION_ONLY)
 
@@ -49,7 +47,6 @@ class BlurFaceHelper(private val context: Context) : BlurClassifier {
 //        drawable.setBounds(0, 0, canvas.width, canvas.height)
 //        drawable.draw(canvas)
 //        val outputArray = processBitmap(bitmap1)
-
         return listOf(
             BlurModel(
                 blurStrength = outputArray[0][0],
@@ -64,19 +61,13 @@ class BlurFaceHelper(private val context: Context) : BlurClassifier {
             ByteBuffer.allocateDirect(BATCH_SIZE * Constants.desiredWidth * Constants.desiredHeight * CHANNELS * 4)
         byteBuffer.order(ByteOrder.nativeOrder())
 
-        // Normalize pixel values to [0,1] and add the batch dimension
-        for (i in 0 until Constants.desiredWidth) {
-            for (j in 0 until Constants.desiredWidth) {
-                val pixelValue = bitmap.getPixel(j, i)
+        val pixels = IntArray(Constants.desiredWidth * Constants.desiredHeight)
+        bitmap.getPixels(pixels, 0, Constants.desiredWidth, 0, 0, Constants.desiredWidth, Constants.desiredHeight)
 
-                // Normalize the pixel values to [0, 1]
-                val normalizedValue = ((pixelValue shr 16 and 0xFF) / 255.0).toFloat()
-
-                // Add the pixel values to the buffer
-                byteBuffer.putFloat(normalizedValue)
-            }
+        for (element in pixels) {
+            val normalizedValue = ((element shr 16 and 0xFF) / 255.0).toFloat()
+            byteBuffer.putFloat(normalizedValue)
         }
-
         // Add the batch dimension
         byteBuffer.rewind()
         return byteBuffer
@@ -102,5 +93,10 @@ class BlurFaceHelper(private val context: Context) : BlurClassifier {
         }
         interpreterApi?.run(inputBuffer, outputArray)
         return outputArray
+    }
+
+    companion object {
+        private  const val CHANNELS = 3
+        private const val BATCH_SIZE = 1
     }
 }

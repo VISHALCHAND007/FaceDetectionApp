@@ -66,5 +66,5 @@ dependencies {
     implementation("com.google.android.gms:play-services-tflite-gpu:16.2.0")
 
     //open-cv
-    implementation("com.quickbirdstudios:opencv-contrib:4.5.3.0")
+//    implementation("com.quickbirdstudios:opencv-contrib:4.5.3.0")
 }

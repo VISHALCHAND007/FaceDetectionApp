@@ -31,10 +31,10 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import com.example.facedetectionapp.caching.MyLRUCache
+import com.example.facedetectionapp.caching.OnBitmapAddedListener
 import com.example.facedetectionapp.databinding.ActivityCameraBinding
 import com.example.facedetectionapp.utils.Constants
 import com.example.facedetectionapp.utils.blurFaceDetection.data.BlurFaceHelper
-import com.example.facedetectionapp.utils.blurFaceDetection.data.BlurImageAnalyser
 import com.example.facedetectionapp.utils.blurFaceDetection.model.BlurModel
 import com.example.facedetectionapp.utils.blurFaceDetection.presentation.log
 import com.example.facedetectionapp.utils.customPermissionRequest
@@ -47,13 +47,13 @@ import com.google.android.gms.tflite.java.TfLite
 import com.google.mediapipe.tasks.components.containers.Detection
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import org.opencv.android.OpenCVLoader
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -72,14 +72,16 @@ class CameraActivity : AppCompatActivity() {
     private var imgProxy: ImageProxy? = null
     private lateinit var imageCapture: ImageCapture
     private val storagePermission = android.Manifest.permission.WRITE_EXTERNAL_STORAGE
-    private lateinit var uri: Uri
-    private lateinit var blurAnalyser: BlurImageAnalyser
     private lateinit var boundingBox: RectF
-    private lateinit var croppedFace: Bitmap
     private var timer = ""
-    private var sec = 0
+    var sec = 0
     private lateinit var statusText: String
     private lateinit var myLRUCache: MyLRUCache
+    private var clickImg: Boolean = true
+    private lateinit var uri: Uri
+    private lateinit var overlayBitmap: Bitmap
+    private lateinit var imgList: ArrayList<Bitmap>
+    private lateinit var blurHelper: BlurFaceHelper
 
     private val requestPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -95,8 +97,7 @@ class CameraActivity : AppCompatActivity() {
         binding = ActivityCameraBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        //initialize the library
-        OpenCVLoader.initDebug()
+
         TfLite.initialize(this@CameraActivity)
 
         CoroutineScope(Dispatchers.Main).launch {
@@ -119,6 +120,8 @@ class CameraActivity : AppCompatActivity() {
     }
 
     private fun initElements() {
+        blurHelper = BlurFaceHelper(this@CameraActivity)
+        blurHelper.setUpInterpreter()
         //initializing elements used in caching
         // Create an instance of your custom LRU cache with a specified max size
         val maxMemory = (Runtime.getRuntime().maxMemory() / 1024).toInt()
@@ -128,9 +131,19 @@ class CameraActivity : AppCompatActivity() {
 
     @SuppressLint("SetTextI18n")
     private fun initListeners() {
-        blurAnalyser = BlurImageAnalyser(this@CameraActivity) { results ->
-            analyseBlurriness(results)
-        }
+        myLRUCache.setOnBitmapAddedListener(object : OnBitmapAddedListener {
+            override fun onBitmapAdded(key: String, bitmap: Bitmap) {
+                //here bitmap is the cached bitmap
+                log("Image Cached $sec")
+                overlayBitmap = bitmap
+
+                //clearing cache
+                myLRUCache.removeBitmapFromMemoryCache(OVERLAY_IMG)
+
+                deleteFileWithUri(uri)
+                checkBlurriness(bitmap)
+            }
+        })
     }
 
     @SuppressLint("SetTextI18n")
@@ -139,36 +152,37 @@ class CameraActivity : AppCompatActivity() {
                  Flow will change now first, we will check for the blur strength of the cropped image
                  and base no that action will be took:
                  i. If image is blurred -> retake the next frame with start
-                 ii. If image is non-blurred -> save it to gallery and close the image proxy &
+                 ii. If image is non-blurred -> save it to gallery and close the image proxy
         */
         val blurStrength = results[0].blurStrength
         val nonBlurStrength = results[0].nonBlurStrength
-        log("blur: $blurStrength===> nonBlur: $nonBlurStrength")
         binding.thresholdTv.text = "blur: $blurStrength===> nonBlur: $nonBlurStrength"
 
         statusText = "Received Results of blurriness $sec"
         log(statusText)
-        if (blurStrength < nonBlurStrength) {
+        if (blurStrength > nonBlurStrength) {
             //non-blur image
             log("Non-blur image")
-//            setStatus("Non-blur image")
-            // Save the cropped face
-//            setStatus("Cropped Image Saved")
-            saveMediaToStorage(croppedFace)
-            imgProxy = null
-            faceDetectorHelper.clearFaceDetector()
+            // Save the cropped face with overlay image from cache
+            saveImage()
+//            imgProxy = null
+//            faceDetectorHelper.clearFaceDetector()
         } else {
             //image is blur
             log("Blur image")
-//            setStatus("Blur image")
+            clickImg = true
             createImageProxy()
         }
     }
 
-    private fun setStatus(str: String) {
-        binding.statusTv.text = str
+    private fun saveImage() {
+        imgList = ArrayList()
+        imgList.add(overlayBitmap)
+        //cropping and saving face as well
+        CoroutineScope(Dispatchers.IO).launch {
+            cropAndSave(overlayBitmap)
+        }
     }
-
 
     private fun initTasks() {
         cameraSelector =
@@ -255,20 +269,9 @@ class CameraActivity : AppCompatActivity() {
         val detections = resultBundle.results[0].detections()
         setBoxes(detections)
         //capture
-        if (!detections.isNullOrEmpty()) {
-            if (takePictureJob == null || takePictureJob?.isCompleted == true) {
-                // Start a new coroutine to take a picture every 5 seconds
-                takePictureJob = CoroutineScope(Dispatchers.IO).launch {
-                    while (isActive) {
-                        // Take a picture
-                        withContext(Dispatchers.Main) {
-                            clickImage()
-                        }
-                        // Delay for 5 seconds before taking the next picture
-                        delay(5000)
-                    }
-                }
-            }
+        if (!detections.isNullOrEmpty() && clickImg) {
+            clickImage()
+            clickImg = false
         }
     }
 
@@ -299,10 +302,7 @@ class CameraActivity : AppCompatActivity() {
     companion object {
         const val DEFAULT_WIDTH = 1280
         const val DEFAULT_HEIGHT = 720
-        var takePictureJob: Job? = null
-        const val NORMAL_IMG = "normalImg"
         const val OVERLAY_IMG = "overlayImg"
-        const val CROPPED_IMG = "croppedImg"
         fun start(context: Context) {
             Intent(context, CameraActivity::class.java).also {
                 context.startActivity(it)
@@ -339,9 +339,9 @@ class CameraActivity : AppCompatActivity() {
                 object : ImageCapture.OnImageSavedCallback {
                     override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                         CoroutineScope(Dispatchers.IO).launch {
-                            statusText = "Image Saved $sec"
+//                            statusText = "Image Saved $sec"
                             log(statusText)
-                            saveImageWithOverlay(outputFileResults)
+                            cacheImageWithOverlay(outputFileResults)
                         }
                     }
 
@@ -354,29 +354,27 @@ class CameraActivity : AppCompatActivity() {
         }
     }
 
-    private fun saveImageWithOverlay(outputFileResults: ImageCapture.OutputFileResults) {
-        statusText = "Saving with facebox $sec"
+    private fun cacheImageWithOverlay(outputFileResults: ImageCapture.OutputFileResults) {
+        statusText = "Caching with facebox $sec"
         log(statusText)
         try {
             uri = outputFileResults.savedUri!!
             val bitmap = getBitmapFromUri(uri) //image from gallery
             val finalBitmap = getBitmapFromView(bitmap, binding.cameraView)
             if (finalBitmap != null) {
-//                setStatus("Saved with overlay")
                 //new flow save everything in cache until we get the non-blur image classified
-                saveMediaToStorage(finalBitmap)
-                statusText = "Saved Image with facebox $sec"
-                log(statusText)
-                cropAndSave(finalBitmap)
+                myLRUCache.addBitmapToMemoryCache(OVERLAY_IMG, finalBitmap)
+                //continue with the listener from here
             }
         } catch (e: Exception) {
             Log.e("Error saving: ", e.toString())
         }
     }
 
-    private fun cropAndSave(originalBitmap: Bitmap) {
+    private suspend fun cropAndSave(originalBitmap: Bitmap) = coroutineScope {
         statusText = "Cropping face $sec"
         log(statusText)
+
         val width = originalBitmap.width
         val height = originalBitmap.height
 
@@ -385,90 +383,133 @@ class CameraActivity : AppCompatActivity() {
         var top = height
         var bottom = 0
 
-        for (x in 0 until width) {
-            for (y in 0 until height) {
-                if (originalBitmap.getPixel(x, y) == Constants.color) {
-                    left = minOf(left, x)
-                    right = maxOf(right, x)
-                    top = minOf(top, y)
-                    bottom = maxOf(bottom, y)
+        val numChunks = 2 // Adjust the number of chunks based on your requirements
+
+        val chunkSizeX = width / numChunks
+        val chunkSizeY = height / numChunks
+
+        val deferredList = mutableListOf<Deferred<Unit>>()
+
+        for (chunkIndexX in 0 until numChunks) {
+            for (chunkIndexY in 0 until numChunks) {
+                val startX = chunkIndexX * chunkSizeX
+                val startY = chunkIndexY * chunkSizeY
+                val endX = minOf((chunkIndexX + 1) * chunkSizeX, width)
+                val endY = minOf((chunkIndexY + 1) * chunkSizeY, height)
+
+                deferredList += async(Dispatchers.Default) {
+                    for (x in startX until endX) {
+                        for (y in startY until endY) {
+                            if (originalBitmap.getPixel(x, y) == Constants.color) {
+                                // Update bounding box within a critical section
+                                synchronized(this@CameraActivity) {
+                                    left = minOf(left, x)
+                                    right = maxOf(right, x)
+                                    top = minOf(top, y)
+                                    bottom = maxOf(bottom, y)
+                                }
+
+                                // Optimize: Break out of the inner loop once the color is found
+                                break
+                            }
+                        }
+                    }
                 }
             }
         }
+
+        // Wait for all coroutines to complete
+        deferredList.awaitAll()
+
         // Ensure that the bounding box is within the image bounds
         left = maxOf(0, left)
         right = minOf(width - 1, right)
         top = maxOf(0, top)
-        bottom = minOf(height - 1, bottom)
+        bottom = minOf(height + 3, bottom + 3)
 
-        croppedFace =
-            Bitmap.createBitmap(
-                originalBitmap,
-                left,
-                top,
-                right - left + 1,
-                bottom - top + 1
-            )
+        // Create cropped bitmap
+        val croppedFace = Bitmap.createBitmap(
+            originalBitmap,
+            left,
+            top,
+            right - left + 1,
+            bottom - top + 1
+        )
+
         statusText = "Cropping finished $sec"
         log(statusText)
-        checkBlurriness()
 
+        imgList.add(croppedFace)
+
+        // Saving images
+        saveMediaToStorage(imgList)
     }
 
-    private fun checkBlurriness() {
+    private fun checkBlurriness(bitmap: Bitmap) {
         statusText = "Checking blurriness $sec"
         log(statusText)
         try {
-            val results = BlurFaceHelper(this@CameraActivity).classify(croppedFace)
+            val results = blurHelper.classify(bitmap)
             analyseBlurriness(results)
         } catch (e: Exception) {
             log(e.message.toString())
         }
     }
 
-    private fun saveMediaToStorage(bitmap: Bitmap) {
+    private fun saveMediaToStorage(list: ArrayList<Bitmap>) {
+        statusText = "Saving the cached image to gallery $sec"
+        log(statusText)
         CoroutineScope(Dispatchers.IO).launch {
+            list.forEach {
+                val bitmap = it
+                // Generating a file name
+                val filename = "${System.currentTimeMillis()}.jpeg"
 
-            // Generating a file name
-            val filename = "${System.currentTimeMillis()}.jpeg"
+                // Output stream
+                var fos: OutputStream? = null
 
-            // Output stream
-            var fos: OutputStream? = null
+                // For devices running android >= Q
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    // getting the contentResolver
+                    this@CameraActivity.contentResolver?.also { resolver ->
 
-            // For devices running android >= Q
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // getting the contentResolver
-                this@CameraActivity.contentResolver?.also { resolver ->
+                        // Content resolver will process the content-values
+                        val contentValues = ContentValues().apply {
 
-                    // Content resolver will process the content-values
-                    val contentValues = ContentValues().apply {
+                            // putting file information in content values
+                            put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
+                            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                            put(
+                                MediaStore.MediaColumns.RELATIVE_PATH,
+                                Environment.DIRECTORY_PICTURES
+                            )
+                        }
 
-                        // putting file information in content values
-                        put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-                        put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-                        put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES)
+                        // Inserting the contentValues to
+                        // contentResolver and getting the Uri
+                        val imageUri: Uri? =
+                            resolver.insert(
+                                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                                contentValues
+                            )
+
+                        // Opening an outputstream with the Uri that we got
+                        fos = imageUri?.let { resolver.openOutputStream(it) }
                     }
-
-                    // Inserting the contentValues to
-                    // contentResolver and getting the Uri
-                    val imageUri: Uri? =
-                        resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-
-                    // Opening an outputstream with the Uri that we got
-                    fos = imageUri?.let { resolver.openOutputStream(it) }
+                } else {
+                    // These for devices running on android < Q
+                    val imagesDir =
+                        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                    val image = File(imagesDir, filename)
+                    fos = FileOutputStream(image)
                 }
-            } else {
-                // These for devices running on android < Q
-                val imagesDir =
-                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-                val image = File(imagesDir, filename)
-                fos = FileOutputStream(image)
-            }
 
-            fos?.use {
-                // Finally writing the bitmap to the output stream that we opened
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, it)
-                deleteFileWithUri(uri)
+                fos?.use {
+                    // Finally writing the bitmap to the output stream that we opened
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 100, it)
+                    statusText = "Saved the cached image to gallery $sec"
+                    log(statusText)
+                }
             }
         }
     }
