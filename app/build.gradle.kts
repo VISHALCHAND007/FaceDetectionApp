@@ -39,7 +39,9 @@ android {
 }
 
 dependencies {
-    implementation("androidx.core:core-ktx:1.9.0")
+    val lifecycle_version = "2.6.2"
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:$lifecycle_version")
+    implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.10.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
@@ -53,7 +55,7 @@ dependencies {
     implementation("androidx.camera:camera-view:1.3.0")
     //blaze-face
     implementation("com.google.mediapipe:tasks-vision:0.20230731")
-    implementation("androidx.activity:activity-ktx:1.8.0")
+    implementation("androidx.activity:activity-ktx:1.8.1")
 
     // ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2")
@@ -68,3 +70,6 @@ dependencies {
     //open-cv
 //    implementation("com.quickbirdstudios:opencv-contrib:4.5.3.0")
 }
+//task wrapper(type: Wrapper){
+//    gradleVersion = '8.0'
+//}

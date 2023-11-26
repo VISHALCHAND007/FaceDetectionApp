@@ -37,11 +37,9 @@ import com.example.facedetectionapp.utils.Constants
 import com.example.facedetectionapp.utils.blurFaceDetection.data.BlurFaceHelper
 import com.example.facedetectionapp.utils.blurFaceDetection.model.BlurModel
 import com.example.facedetectionapp.utils.blurFaceDetection.presentation.log
-import com.example.facedetectionapp.utils.customPermissionRequest
 import com.example.facedetectionapp.utils.faceDetection.data.FaceDetectorHelper
 import com.example.facedetectionapp.utils.faceDetection.domain.FaceBox
 import com.example.facedetectionapp.utils.isPermissionGranted
-import com.example.facedetectionapp.utils.openPermissionSetting
 import com.example.facedetectionapp.viewModels.CameraXViewModel
 import com.google.android.gms.tflite.java.TfLite
 import com.google.mediapipe.tasks.components.containers.Detection
@@ -87,7 +85,7 @@ class CameraActivity : AppCompatActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
             if (!isGranted) {
                 //open camera
-                requestStoragePermission()
+//                requestStoragePermission()
             }
         }
 
@@ -350,7 +348,7 @@ class CameraActivity : AppCompatActivity() {
                     }
                 })
         } else {
-            requestStoragePermission()
+//            requestStoragePermission()
         }
     }
 
@@ -581,20 +579,4 @@ class CameraActivity : AppCompatActivity() {
         }
     }
 
-    private fun requestStoragePermission() {
-        when {
-            shouldShowRequestPermissionRationale(storagePermission) -> {
-                customPermissionRequest(
-                    "Storage Permission Required",
-                    "To store the image we require this permission."
-                ) {
-                    openPermissionSetting()
-                }
-            }
-
-            else -> {
-                requestPermissionLauncher.launch(storagePermission)
-            }
-        }
-    }
 }
